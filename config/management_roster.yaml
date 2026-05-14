@@ -54,9 +54,10 @@ management:
   - name: 李肖
     english_name: null
     dingtalk_user_id: "17738196740967555"
-    role: 斯坦教务长（培养中）
+    role: 斯坦教务长（候选/代理）
     scope: [教学续费, 教学管理, 比赛考级, 教师员工管理]
     reports_to: 苗雅楠
+    escalation: observer  # 暂不纳入催收升级链
 
   - name: 赵晓华
     english_name: Doris
