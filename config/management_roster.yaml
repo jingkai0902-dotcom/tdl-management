@@ -1,0 +1,87 @@
+# 管理层名单（来源：钉钉员工信息表 2026-04）
+# 用于催收升级链路由、权限配置
+
+management:
+  - name: 李珍
+    english_name: Helen
+    dingtalk_user_id: "0611436746849471"
+    role: 投资人
+    scope: [全盘管理]
+    reports_to: null
+
+  - name: 张蕾
+    english_name: Teresa
+    dingtalk_user_id: "0612430128789086"
+    role: 投资人
+    scope: [励步教学管理, 新人管理]
+    reports_to: null
+
+  - name: 荆少巍
+    english_name: Frank
+    dingtalk_user_id: "0617564550-1513038363"
+    role: 投资人
+    scope: [全公司IT, AI技术总控, 斯坦教学质量, 薪资统计与发放]
+    reports_to: null
+
+  - name: 张皓
+    english_name: Allen
+    dingtalk_user_id: "2800650646785267"
+    role: 励步人力经理
+    scope: [励步招聘, 人力工作, 企业文化建设]
+    reports_to: 李珍
+
+  - name: 许梦冉
+    english_name: Rachel
+    dingtalk_user_id: "0124071122-1854742885"
+    role: 斯坦人力经理
+    scope: [斯坦招聘, 人力工作, 企业文化建设]
+    reports_to: 李珍
+
+  - name: 时颖
+    english_name: Sherry
+    dingtalk_user_id: "0962151633-1819579479"
+    role: 励步销售+市场经理
+    scope: [销售业绩管理, 新人培训, 市场活动, 抖音小红书, 直播]
+    reports_to: 李珍
+
+  - name: 苗雅楠
+    english_name: Sun
+    dingtalk_user_id: "021801686333412178"
+    role: 斯坦校长
+    scope: [斯坦销售部, 市场部, 教学部整体管理]
+    reports_to: 李珍
+
+  - name: 李肖
+    english_name: null
+    dingtalk_user_id: "17738196740967555"
+    role: 斯坦教务长（培养中）
+    scope: [教学续费, 教学管理, 比赛考级, 教师员工管理]
+    reports_to: 苗雅楠
+
+  - name: 赵晓华
+    english_name: Doris
+    dingtalk_user_id: "030750415466219153"
+    role: 励步教务主管
+    scope: [班主任工作, 家长端维护, 教师服务反馈]
+    reports_to: 张蕾
+
+  - name: 曹艳明
+    english_name: Alice
+    dingtalk_user_id: "062157571763350368"
+    role: 励步绿谷校区教学主管
+    scope: [绿谷校区英语教学管理, 带班]
+    reports_to: 张蕾
+
+  - name: 韩雪敏
+    english_name: Happy
+    dingtalk_user_id: "062159046869494464"
+    role: 励步教学培训
+    scope: [教学培训, 带班]
+    reports_to: 张蕾
+
+  - name: 邢杨
+    english_name: Marvin
+    dingtalk_user_id: "2763020351-1312457317"
+    role: 励步鑫和校区教学管理
+    scope: [鑫和校区全部教学管理]
+    reports_to: 张蕾
