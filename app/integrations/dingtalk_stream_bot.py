@@ -4,13 +4,14 @@ import asyncio
 import logging
 
 import dingtalk_stream
-from dingtalk_stream import AckMessage
+from dingtalk_stream import AckMessage, CallbackHandler, CardCallbackMessage
 from dingtalk_stream.chatbot import ChatbotHandler, ChatbotMessage
 
 from app.config import get_settings
 from app.database import SessionLocal
 from app.integrations.dingtalk_card import render_markdown
 from app.schemas import DingTalkIncomingMessage
+from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
 from app.services.intake_service import intake_dingtalk_message
 
 
@@ -38,6 +39,30 @@ class TDLChatbotHandler(ChatbotHandler):
         return AckMessage.STATUS_OK, "OK"
 
 
+class TDLCardCallbackHandler(CallbackHandler):
+    async def process(self, callback):
+        incoming = CardCallbackMessage.from_dict(callback.data)
+        card_private_data = incoming.content.get("cardPrivateData", {})
+        params = card_private_data.get("params", {})
+        action_id = params.get("actionId") or params.get("action_id") or params.get("action")
+        actor_id = incoming.user_id
+        if not action_id or not actor_id:
+            return AckMessage.STATUS_BAD_REQUEST, {"handled": False}
+
+        async with SessionLocal() as session:
+            result = await handle_tdl_card_callback(
+                session,
+                action_id=action_id,
+                actor_id=actor_id,
+            )
+        return AckMessage.STATUS_OK, {
+            "handled": result.handled,
+            "action": result.action,
+            "tdlId": result.tdl_id,
+            "status": result.status,
+        }
+
+
 def run_stream_bot() -> None:
     settings = get_settings()
     credential = dingtalk_stream.Credential(
@@ -48,6 +73,10 @@ def run_stream_bot() -> None:
     client.register_callback_handler(
         dingtalk_stream.chatbot.ChatbotMessage.TOPIC,
         TDLChatbotHandler(),
+    )
+    client.register_callback_handler(
+        dingtalk_stream.CallbackHandler.TOPIC_CARD_CALLBACK,
+        TDLCardCallbackHandler(),
     )
     client.start_forever()
 
