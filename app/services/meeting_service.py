@@ -1,8 +1,6 @@
-from datetime import UTC, datetime, timedelta
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.ai_client import AIClient, PlaceholderAIClient
+from app.integrations.ai_client import AIClient, get_ai_client
 from app.models import AuditLog, Decision, Meeting, TDL
 from app.schemas import MeetingMinutesIngest
 
@@ -37,7 +35,7 @@ async def parse_meeting_minutes(
     payload: MeetingMinutesIngest,
     ai_client: AIClient | None = None,
 ) -> tuple[Meeting, list[Decision], list[TDL]]:
-    client = ai_client or PlaceholderAIClient()
+    client = ai_client or get_ai_client()
     meeting = Meeting(
         title=payload.title,
         source_text=payload.source_text,
@@ -46,7 +44,12 @@ async def parse_meeting_minutes(
     session.add(meeting)
     await session.flush()
 
-    decision_drafts = await client.extract_meeting_decisions(payload.source_text)
+    try:
+        decision_drafts = await client.extract_meeting_decisions(payload.source_text)
+    except Exception:
+        await session.rollback()
+        raise
+
     decisions: list[Decision] = []
     tdls: list[TDL] = []
     for draft in decision_drafts:
@@ -66,7 +69,7 @@ async def parse_meeting_minutes(
             decision_id=decision.decision_id,
             title=draft.tdl_title,
             owner_id=owner_id,
-            due_at=datetime.now(tz=UTC) + timedelta(days=7),
+            due_at=draft.due_at,
             created_by=payload.created_by,
             source="meeting_minutes",
             status="draft",

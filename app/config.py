@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://tdl:tdl@127.0.0.1:5432/tdl"
 
     openai_api_key: str = ""
+    openai_model: str = "gpt-5.5"
     deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-v4-pro"
 
     dingtalk_app_key: str = ""
     dingtalk_app_secret: str = ""

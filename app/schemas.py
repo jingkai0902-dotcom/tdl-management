@@ -15,6 +15,7 @@ class TDLCreate(BaseModel):
 
 
 class TDLDraftCreate(TDLCreate):
+    due_at: datetime | None = None
     raw_text: str | None = None
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
@@ -23,7 +24,7 @@ class TDLRead(BaseModel):
     tdl_id: UUID
     title: str
     owner_id: str
-    due_at: datetime
+    due_at: datetime | None
     status: str
     priority: str
     source: str

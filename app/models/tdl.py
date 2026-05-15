@@ -19,7 +19,7 @@ class TDL(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     owner_id: Mapped[str] = mapped_column(String(128), nullable=False)
     participants: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     snooze_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

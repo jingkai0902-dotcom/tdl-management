@@ -6,7 +6,7 @@ from app.schemas import TDLCreate, TDLDraftCreate
 
 
 async def create_tdl(session: AsyncSession, payload: TDLCreate) -> TDL:
-    tdl = TDL(**payload.model_dump())
+    tdl = TDL(**payload.model_dump(), status="active")
     session.add(tdl)
     await session.flush()
 

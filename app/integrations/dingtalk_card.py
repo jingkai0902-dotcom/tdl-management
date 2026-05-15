@@ -20,7 +20,9 @@ class TDLCard:
     status: str
 
 
-def _format_due_at(value: datetime) -> str:
+def _format_due_at(value: datetime | None) -> str:
+    if value is None:
+        return "[待补充]"
     return value.strftime("%Y-%m-%d %H:%M")
 
 

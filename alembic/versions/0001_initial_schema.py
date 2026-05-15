@@ -51,7 +51,7 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=500), nullable=False),
         sa.Column("owner_id", sa.String(length=128), nullable=False),
         sa.Column("participants", postgresql.JSONB(), nullable=False),
-        sa.Column("due_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("due_at", sa.DateTime(timezone=True)),
         sa.Column("start_at", sa.DateTime(timezone=True)),
         sa.Column("snooze_until", sa.DateTime(timezone=True)),
         sa.Column("status", sa.String(length=32), nullable=False),
