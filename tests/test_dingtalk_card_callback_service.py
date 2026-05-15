@@ -4,7 +4,10 @@ from uuid import uuid4
 import pytest
 
 from app.integrations.dingtalk_card import build_card_action_id
-from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
+from app.services.dingtalk_card_callback_service import (
+    ONE_CLICK_ACTIONS,
+    handle_tdl_card_callback,
+)
 
 
 @pytest.mark.asyncio
@@ -17,10 +20,7 @@ async def test_handle_tdl_card_callback_routes_complete(monkeypatch) -> None:
         assert actor_id == "user-1"
         return SimpleNamespace(tdl_id=tdl_id, status="done")
 
-    monkeypatch.setattr(
-        "app.services.dingtalk_card_callback_service.complete_tdl",
-        fake_complete_tdl,
-    )
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "complete", fake_complete_tdl)
 
     result = await handle_tdl_card_callback(
         "session",

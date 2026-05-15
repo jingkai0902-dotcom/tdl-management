@@ -17,9 +17,9 @@ class CardCallbackResult:
 
 
 ONE_CLICK_ACTIONS = {
-    "confirm": "confirm_tdl",
-    "complete": "complete_tdl",
-    "need_help": "request_help_tdl",
+    "confirm": confirm_tdl,
+    "complete": complete_tdl,
+    "need_help": request_help_tdl,
 }
 
 FOLLOW_UP_ACTIONS = {
@@ -44,8 +44,8 @@ async def handle_tdl_card_callback(
     if parsed is None:
         return CardCallbackResult(handled=False)
     action, tdl_id = parsed
-    handler_name = ONE_CLICK_ACTIONS.get(action)
-    if handler_name is None:
+    handler = ONE_CLICK_ACTIONS.get(action)
+    if handler is None:
         follow_up = FOLLOW_UP_ACTIONS.get(action)
         if follow_up is None:
             return CardCallbackResult(handled=False, action=action, tdl_id=str(tdl_id))
@@ -58,7 +58,6 @@ async def handle_tdl_card_callback(
             required_fields=required_fields,
         )
 
-    handler = globals()[handler_name]
     tdl = await handler(session, tdl_id, actor_id)
     return CardCallbackResult(
         handled=True,
