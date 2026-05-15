@@ -1,0 +1,5 @@
+mvp:
+  overdue_day_1: remind_owner
+  overdue_day_2: ask_owner
+  overdue_day_3: mark_attention
+  manual_escalation_only: true

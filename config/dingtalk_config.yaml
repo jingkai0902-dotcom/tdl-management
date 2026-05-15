@@ -1,0 +1,8 @@
+reminders:
+  teacher_shift: "08:30"
+  operations_shift: "08:30"
+  operations_shift_tuesday: "10:00"
+  standard_shift: "08:30"
+
+calendar:
+  provider: dingtalk
