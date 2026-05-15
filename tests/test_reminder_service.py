@@ -57,9 +57,19 @@ class FakeResult:
 class FakeDingTalkClient:
     def __init__(self) -> None:
         self.messages = []
+        self.interactive_cards = []
 
     async def send_work_markdown(self, *, user_ids, title, text) -> None:
         self.messages.append({"user_ids": user_ids, "title": title, "text": text})
+
+    async def send_interactive_card_to_user(self, *, user_id, card_template_id, card_data):
+        self.interactive_cards.append(
+            {
+                "user_id": user_id,
+                "card_template_id": card_template_id,
+                "card_data": card_data,
+            }
+        )
 
 
 def _tdl(
@@ -331,6 +341,35 @@ async def test_send_reminder_dispatches_routes_cards_to_owners() -> None:
             "text": "## 今日待办\n\n测试任务\n截止：2026-05-18 18:00\n这条任务今天到期\n昨天完成了 0 条\n\n操作：\n- 标记完成\n- 暂缓",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_send_reminder_dispatches_uses_interactive_cards_when_configured() -> None:
+    due_today = _tdl(
+        due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC),
+        owner_id="owner-1",
+    )
+    dispatches = build_sendable_reminder_cards(
+        [due_today],
+        build_reminder_candidates(
+            [due_today],
+            as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+            policy={},
+        ),
+    )
+    client = FakeDingTalkClient()
+
+    sent_count = await send_reminder_dispatches(
+        client,
+        dispatches,
+        interactive_card_template_id="template.schema",
+    )
+
+    assert sent_count == 1
+    assert client.messages == []
+    assert client.interactive_cards[0]["user_id"] == "owner-1"
+    assert client.interactive_cards[0]["card_template_id"] == "template.schema"
+    assert client.interactive_cards[0]["card_data"]["msgTitle"] == "今日待办"
 
 
 def test_count_yesterday_completions_uses_previous_calendar_day() -> None:

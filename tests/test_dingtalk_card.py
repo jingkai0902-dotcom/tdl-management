@@ -2,9 +2,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.integrations.dingtalk_card import (
+    build_card_action_id,
     build_created_card,
     build_draft_card,
     build_reminder_card,
+    render_interactive_card_data,
     render_markdown,
 )
 
@@ -101,3 +103,13 @@ def test_day_two_reminder_card_asks_for_support() -> None:
     assert card.title == "需要支持"
     assert "审核课程方案 已逾期 2 天" in card.body
     assert [button.action for button in card.buttons] == ["complete", "postpone", "need_help"]
+
+
+def test_render_interactive_card_data_keeps_button_actions() -> None:
+    card = build_reminder_card(StubTDL("active"), action="ask_owner", overdue_days=2)
+
+    result = render_interactive_card_data(card)
+
+    assert result["msgTitle"] == "需要支持"
+    assert "审核课程方案 已逾期 2 天" in result["staticMsgContent"]
+    assert build_card_action_id("complete", card.buttons[0].tdl_id) in result["sys_full_json_obj"]
