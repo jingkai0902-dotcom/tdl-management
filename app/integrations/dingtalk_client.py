@@ -110,31 +110,92 @@ class DingTalkClient:
         description: str | None = None,
         duration_minutes: int = 30,
     ) -> str:
+        if not self.agent_id:
+            raise DingTalkAPIError("Missing DingTalk agent_id")
         token = await self._get_access_token()
-        end_time = int(due_at.timestamp() * 1000)
-        start_time = int((due_at - timedelta(minutes=duration_minutes)).timestamp() * 1000)
         response = await self.http_client.post(
             "/topapi/calendar/v2/event/create",
             params={"access_token": token},
-            json={
-                "calendar_id": "primary",
-                "summary": title,
-                "description": description or "",
-                "start_time": start_time,
-                "end_time": end_time,
-                "organizer": {"userid": owner_id},
-                "attendees": [
-                    {"userid": user_id}
-                    for user_id in (participant_user_ids or [])
-                    if user_id != owner_id
-                ],
-            },
+            json=self._calendar_event_request_body(
+                owner_id=owner_id,
+                title=title,
+                due_at=due_at,
+                participant_user_ids=participant_user_ids,
+                description=description,
+                duration_minutes=duration_minutes,
+            ),
         )
         payload = response.json()
         event_id = payload.get("result", {}).get("event_id")
         if payload.get("errcode") != 0 or not event_id:
             raise DingTalkAPIError(f"Failed to create DingTalk calendar event: {payload}")
         return event_id
+
+    async def update_tdl_calendar_event(
+        self,
+        *,
+        event_id: str,
+        owner_id: str,
+        title: str,
+        due_at: datetime,
+        participant_user_ids: list[str] | None = None,
+        description: str | None = None,
+        duration_minutes: int = 30,
+    ) -> str:
+        if not self.agent_id:
+            raise DingTalkAPIError("Missing DingTalk agent_id")
+        token = await self._get_access_token()
+        response = await self.http_client.post(
+            "/topapi/calendar/v2/event/update",
+            params={"access_token": token},
+            json=self._calendar_event_request_body(
+                event_id=event_id,
+                owner_id=owner_id,
+                title=title,
+                due_at=due_at,
+                participant_user_ids=participant_user_ids,
+                description=description,
+                duration_minutes=duration_minutes,
+            ),
+        )
+        payload = response.json()
+        if payload.get("errcode") != 0:
+            raise DingTalkAPIError(f"Failed to update DingTalk calendar event: {payload}")
+        return event_id
+
+    def _calendar_event_request_body(
+        self,
+        *,
+        owner_id: str,
+        title: str,
+        due_at: datetime,
+        participant_user_ids: list[str] | None = None,
+        description: str | None = None,
+        duration_minutes: int = 30,
+        event_id: str | None = None,
+    ) -> dict:
+        end_time = int(due_at.timestamp())
+        start_time = int((due_at - timedelta(minutes=duration_minutes)).timestamp())
+        event = {
+            "calendar_id": "primary",
+            "summary": title,
+            "description": description or "",
+            "start": {"timestamp": str(start_time), "timezone": "Asia/Shanghai"},
+            "end": {"timestamp": str(end_time), "timezone": "Asia/Shanghai"},
+            "need_remind": False,
+            "organizer": {"userid": owner_id},
+            "attendees": [
+                {"userid": user_id}
+                for user_id in (participant_user_ids or [])
+                if user_id != owner_id
+            ],
+        }
+        if event_id is not None:
+            event["event_id"] = event_id
+        return {
+            "agentid": self.agent_id,
+            "event": event,
+        }
 
     async def _get_access_token(self) -> str:
         if (

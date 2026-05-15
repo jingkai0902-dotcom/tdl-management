@@ -150,7 +150,51 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
         "/topapi/calendar/v2/event/create",
     ]
     assert requests[1].read().decode() == (
-        '{"calendar_id":"primary","summary":"完成招生方案","description":"TDL ID: tdl-1",'
-        '"start_time":1779298200000,"end_time":1779300000000,'
-        '"organizer":{"userid":"owner-1"},"attendees":[{"userid":"user-2"}]}'
+        '{"agentid":"agent-1","event":{"calendar_id":"primary","summary":"完成招生方案",'
+        '"description":"TDL ID: tdl-1","start":{"timestamp":"1779298200","timezone":"Asia/Shanghai"},'
+        '"end":{"timestamp":"1779300000","timezone":"Asia/Shanghai"},"need_remind":false,'
+        '"organizer":{"userid":"owner-1"},"attendees":[{"userid":"user-2"}]}}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/gettoken":
+            return httpx.Response(200, json={"errcode": 0, "access_token": "token-1"})
+        return httpx.Response(200, json={"errcode": 0})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://oapi.dingtalk.com",
+    ) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        event_id = await client.update_tdl_calendar_event(
+            event_id="evt-1",
+            owner_id="owner-1",
+            title="完成招生方案",
+            due_at=datetime(2026, 5, 22, 18, 0, tzinfo=UTC),
+            participant_user_ids=["owner-1", "user-2"],
+            description="TDL ID: tdl-1",
+        )
+
+    assert event_id == "evt-1"
+    assert [request.url.path for request in requests] == [
+        "/gettoken",
+        "/topapi/calendar/v2/event/update",
+    ]
+    assert requests[1].read().decode() == (
+        '{"agentid":"agent-1","event":{"calendar_id":"primary","summary":"完成招生方案",'
+        '"description":"TDL ID: tdl-1","start":{"timestamp":"1779471000","timezone":"Asia/Shanghai"},'
+        '"end":{"timestamp":"1779472800","timezone":"Asia/Shanghai"},"need_remind":false,'
+        '"organizer":{"userid":"owner-1"},"attendees":[{"userid":"user-2"}],"event_id":"evt-1"}}'
     )

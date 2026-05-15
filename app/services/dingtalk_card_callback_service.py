@@ -14,12 +14,11 @@ from app.schemas import (
 )
 from app.services.tdl_service import (
     complete_tdl,
-    postpone_tdl,
     request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
 )
-from app.services.calendar_service import confirm_tdl_with_calendar
+from app.services.calendar_service import confirm_tdl_with_calendar, postpone_tdl_with_calendar
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +103,7 @@ async def _submit_postpone(
 ):
     if submission.due_at is None:
         return None
-    return await postpone_tdl(
+    return await postpone_tdl_with_calendar(
         session,
         tdl_id,
         due_at=submission.due_at,

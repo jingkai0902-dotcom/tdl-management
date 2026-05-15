@@ -16,10 +16,10 @@ from app.services.intake_service import intake_dingtalk_message
 from app.services.calendar_service import (
     confirm_ready_drafts_with_calendar,
     confirm_tdl_with_calendar,
+    postpone_tdl_with_calendar,
 )
 from app.services.tdl_service import (
     complete_tdl,
-    postpone_tdl,
     request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
@@ -75,7 +75,7 @@ async def postpone_action(
     session: AsyncSession = Depends(get_session),
 ):
     try:
-        return await postpone_tdl(
+        return await postpone_tdl_with_calendar(
             session,
             payload.tdl_id,
             due_at=payload.due_at,
