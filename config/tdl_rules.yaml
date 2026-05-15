@@ -1,0 +1,11 @@
+auto_create:
+  minimum_confidence: 0.85
+  require_due_at: true
+  require_owner: true
+  allow_if_involves_others: false
+
+classification:
+  minimum_confidence: 0.70
+
+draft:
+  auto_cancel_after_hours: 24
