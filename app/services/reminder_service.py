@@ -1,4 +1,5 @@
-from datetime import datetime
+from collections import Counter
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,8 +88,12 @@ async def mark_attention_tdls(
 def build_sendable_reminder_cards(
     tdls: list[TDL],
     candidates: list[ReminderCandidateRead],
+    *,
+    yesterday_completed_by_owner: dict[str, int] | None = None,
 ) -> list[ReminderDispatchRead]:
     tdl_by_id = {tdl.tdl_id: tdl for tdl in tdls}
+    counts_by_owner = yesterday_completed_by_owner or {}
+    owners_with_completion_line = set()
     dispatches = []
     for candidate in candidates:
         if candidate.action == "mark_attention":
@@ -96,6 +101,10 @@ def build_sendable_reminder_cards(
         tdl = tdl_by_id.get(candidate.tdl_id)
         if tdl is None:
             continue
+        yesterday_completed_count = None
+        if candidate.owner_id not in owners_with_completion_line:
+            yesterday_completed_count = counts_by_owner.get(candidate.owner_id, 0)
+            owners_with_completion_line.add(candidate.owner_id)
         dispatches.append(
             ReminderDispatchRead(
                 owner_id=candidate.owner_id,
@@ -106,6 +115,7 @@ def build_sendable_reminder_cards(
                         tdl,
                         action=candidate.action,
                         overdue_days=candidate.overdue_days,
+                        yesterday_completed_count=yesterday_completed_count,
                     )
                 ),
             )
@@ -122,7 +132,22 @@ async def run_reminder_cycle(
     tdls = list(result.scalars().all())
     candidates = build_reminder_candidates(tdls, as_of=as_of)
     marked_attention = await mark_attention_tdls(session, candidates)
-    dispatches = build_sendable_reminder_cards(tdls, candidates)
+    completion_result = await session.execute(
+        select(AuditLog).where(
+            AuditLog.entity_type == "tdl",
+            AuditLog.action == "complete",
+            AuditLog.created_at >= _previous_day_start(as_of),
+            AuditLog.created_at < _current_day_start(as_of),
+        )
+    )
+    dispatches = build_sendable_reminder_cards(
+        tdls,
+        candidates,
+        yesterday_completed_by_owner=count_yesterday_completions(
+            list(completion_result.scalars().all()),
+            as_of=as_of,
+        ),
+    )
     return ReminderRunRead(
         candidate_count=len(candidates),
         marked_attention_count=len(marked_attention),
@@ -157,3 +182,31 @@ def _action_for_overdue_days(overdue_days: int, policy: dict) -> str | None:
     if overdue_days >= 3:
         return policy.get("overdue_day_3")
     return None
+
+
+def count_yesterday_completions(
+    audit_logs: list[AuditLog],
+    *,
+    as_of: datetime,
+) -> dict[str, int]:
+    previous_day_start = _previous_day_start(as_of)
+    current_day_start = _current_day_start(as_of)
+    return dict(
+        Counter(
+            audit.actor_id
+            for audit in audit_logs
+            if audit.entity_type == "tdl"
+            and audit.action == "complete"
+            and audit.actor_id is not None
+            and audit.created_at is not None
+            and previous_day_start <= audit.created_at < current_day_start
+        )
+    )
+
+
+def _previous_day_start(as_of: datetime) -> datetime:
+    return _current_day_start(as_of) - timedelta(days=1)
+
+
+def _current_day_start(as_of: datetime) -> datetime:
+    return as_of.replace(hour=0, minute=0, second=0, microsecond=0)
