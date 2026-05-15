@@ -8,10 +8,12 @@ from app.services.reminder_service import (
     build_reminder_candidates,
     build_sendable_reminder_cards,
     count_yesterday_completions,
+    filter_due_candidates_for_run,
     mark_attention_tdls,
     reminder_time_for_owner,
     reminder_time_for_shift,
     run_reminder_cycle,
+    send_reminder_dispatches,
     shift_type_for_owner,
 )
 
@@ -50,6 +52,14 @@ class FakeResult:
 
     def all(self):
         return self.rows
+
+
+class FakeDingTalkClient:
+    def __init__(self) -> None:
+        self.messages = []
+
+    async def send_work_markdown(self, *, user_ids, title, text) -> None:
+        self.messages.append({"user_ids": user_ids, "title": title, "text": text})
 
 
 def _tdl(
@@ -107,6 +117,22 @@ def test_build_reminder_candidates_routes_by_overdue_days() -> None:
         "mark_attention",
     ]
     assert [candidate.overdue_days for candidate in candidates] == [0, 1, 2, 3]
+
+
+def test_build_reminder_candidates_compares_dates_in_run_timezone() -> None:
+    as_of = datetime.fromisoformat("2026-05-19T08:30:00+08:00")
+    due_today_in_shanghai = _tdl(
+        due_at=datetime.fromisoformat("2026-05-18T16:30:00+00:00")
+    )
+
+    candidates = build_reminder_candidates(
+        [due_today_in_shanghai],
+        as_of=as_of,
+        policy={},
+    )
+
+    assert [candidate.action for candidate in candidates] == ["due_today"]
+    assert [candidate.overdue_days for candidate in candidates] == [0]
 
 
 def test_build_reminder_candidates_skips_future_snoozed_and_incomplete_items() -> None:
@@ -203,6 +229,108 @@ async def test_run_reminder_cycle_returns_dispatches_and_marks_attention() -> No
     assert [dispatch.card.title for dispatch in result.dispatches] == ["今日待办"]
     assert "昨天完成了 1 条" in result.dispatches[0].card.body
     assert day_three.status == "attention"
+
+
+def test_filter_due_candidates_for_run_respects_owner_shift_time() -> None:
+    as_of = datetime(2026, 5, 19, 8, 30, tzinfo=UTC)
+    standard = _tdl(
+        due_at=datetime(2026, 5, 19, 18, 0, tzinfo=UTC),
+        owner_id="standard-1",
+    )
+    operations = _tdl(
+        due_at=datetime(2026, 5, 19, 18, 0, tzinfo=UTC),
+        owner_id="ops-1",
+    )
+    candidates = build_reminder_candidates(
+        [standard, operations],
+        as_of=as_of,
+        policy={},
+    )
+    roster = {
+        "management": [
+            {"dingtalk_user_id": "standard-1", "shift_type": "standard_shift"},
+            {"dingtalk_user_id": "ops-1", "shift_type": "operations_shift"},
+        ]
+    }
+    config = {
+        "reminders": {
+            "standard_shift": "08:30",
+            "operations_shift": "08:30",
+            "operations_shift_tuesday": "10:00",
+        }
+    }
+
+    assert [
+        candidate.owner_id
+        for candidate in filter_due_candidates_for_run(
+            candidates,
+            as_of=as_of,
+            roster=roster,
+            config=config,
+        )
+    ] == ["standard-1"]
+
+
+@pytest.mark.asyncio
+async def test_run_reminder_cycle_only_processes_candidates_due_now() -> None:
+    standard = _tdl(
+        due_at=datetime(2026, 5, 19, 18, 0, tzinfo=UTC),
+        owner_id="standard-1",
+    )
+    operations = _tdl(
+        due_at=datetime(2026, 5, 19, 18, 0, tzinfo=UTC),
+        owner_id="ops-1",
+    )
+    session = FakeSession(standard, operations)
+
+    result = await run_reminder_cycle(
+        session,
+        as_of=datetime(2026, 5, 19, 8, 30, tzinfo=UTC),
+        roster={
+            "management": [
+                {"dingtalk_user_id": "standard-1", "shift_type": "standard_shift"},
+                {"dingtalk_user_id": "ops-1", "shift_type": "operations_shift"},
+            ]
+        },
+        dingtalk_config={
+            "reminders": {
+                "standard_shift": "08:30",
+                "operations_shift": "08:30",
+                "operations_shift_tuesday": "10:00",
+            }
+        },
+    )
+
+    assert result.candidate_count == 1
+    assert [dispatch.owner_id for dispatch in result.dispatches] == ["standard-1"]
+
+
+@pytest.mark.asyncio
+async def test_send_reminder_dispatches_routes_cards_to_owners() -> None:
+    due_today = _tdl(
+        due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC),
+        owner_id="owner-1",
+    )
+    dispatches = build_sendable_reminder_cards(
+        [due_today],
+        build_reminder_candidates(
+            [due_today],
+            as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+            policy={},
+        ),
+    )
+    client = FakeDingTalkClient()
+
+    sent_count = await send_reminder_dispatches(client, dispatches)
+
+    assert sent_count == 1
+    assert client.messages == [
+        {
+            "user_ids": ["owner-1"],
+            "title": "今日待办",
+            "text": "## 今日待办\n\n测试任务\n截止：2026-05-18 18:00\n这条任务今天到期\n昨天完成了 0 条\n\n操作：\n- 标记完成\n- 暂缓",
+        }
+    ]
 
 
 def test_count_yesterday_completions_uses_previous_calendar_day() -> None:
