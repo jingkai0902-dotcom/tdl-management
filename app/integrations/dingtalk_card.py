@@ -39,6 +39,10 @@ def build_draft_card(tdl: TDL) -> TDLCard:
         buttons.append(CardButton(label="补截止时间", action="set_due_at", tdl_id=tdl.tdl_id))
     if not missing_fields:
         buttons.append(CardButton(label="确认创建", action="confirm", tdl_id=tdl.tdl_id))
+    if tdl.completion_criteria is None:
+        buttons.append(
+            CardButton(label="补完成标准", action="set_completion_criteria", tdl_id=tdl.tdl_id)
+        )
     buttons.append(CardButton(label="忽略", action="cancel", tdl_id=tdl.tdl_id))
 
     return TDLCard(

@@ -62,6 +62,7 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.tdls[0].completion_criteria == "形成正式 SOP"
     assert result.tdls[0].missing_fields == ["due_at"]
     assert result.tdls[0].recommended_fields == []
+    assert result.tdls[0].recommended_actions == []
     assert result.tdls[0].next_actions == ["set_due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
     assert [button.action for button in result.draft_cards[0].buttons] == ["set_due_at", "cancel"]
@@ -116,6 +117,7 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
     assert result.ready_to_confirm_tdls[0].next_actions == ["confirm"]
     assert result.incomplete_tdls[0].next_actions == ["set_owner", "set_due_at"]
     assert result.incomplete_tdls[0].recommended_fields == ["completion_criteria"]
+    assert result.incomplete_tdls[0].recommended_actions == ["set_completion_criteria"]
 
 
 @pytest.mark.asyncio
