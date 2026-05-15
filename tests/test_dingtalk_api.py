@@ -32,6 +32,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
     async def fake_update_draft_tdl(session, incoming_tdl_id, payload, actor_id):
         assert incoming_tdl_id == tdl_id
         assert payload.owner_id == "0617564550-1513038363"
+        assert payload.completion_criteria == "形成可执行课表"
         return SimpleNamespace(
             tdl_id=tdl_id,
             title="排定新师培训课表",
@@ -39,7 +40,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
             due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
             priority="P2",
             status="draft",
-            completion_criteria=None,
+            completion_criteria="形成可执行课表",
         )
 
     monkeypatch.setattr(
@@ -52,6 +53,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
         TDLDraftUpdate(
             owner_id="0617564550-1513038363",
             due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+            completion_criteria="形成可执行课表",
         ),
         actor_id="0617564550-1513038363",
         session=None,
@@ -59,6 +61,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
 
     assert result.title == "TDL 草稿"
     assert "负责人：0617564550-1513038363" in result.body
+    assert "完成标准：形成可执行课表" in result.body
 
 
 @pytest.mark.asyncio

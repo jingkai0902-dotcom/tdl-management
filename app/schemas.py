@@ -33,6 +33,7 @@ class TDLRead(BaseModel):
     missing_fields: list[str] = Field(default_factory=list)
     recommended_fields: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +60,7 @@ class TDLRead(BaseModel):
                     if getattr(tdl, field_name) is None
                 ],
                 "next_actions": cls._next_actions_for_tdl(tdl),
+                "recommended_actions": cls._recommended_actions_for_tdl(tdl),
             }
         )
 
@@ -72,6 +74,12 @@ class TDLRead(BaseModel):
         if not actions:
             actions.append("confirm")
         return actions
+
+    @staticmethod
+    def _recommended_actions_for_tdl(tdl) -> list[str]:
+        if getattr(tdl, "completion_criteria") is None:
+            return ["set_completion_criteria"]
+        return []
 
 
 class DingTalkIncomingMessage(BaseModel):
@@ -90,6 +98,7 @@ class DingTalkAction(BaseModel):
 class TDLDraftUpdate(BaseModel):
     owner_id: str | None = Field(default=None, min_length=1, max_length=128)
     due_at: datetime | None = None
+    completion_criteria: str | None = None
 
 
 class BatchConfirmDraftsRequest(BaseModel):

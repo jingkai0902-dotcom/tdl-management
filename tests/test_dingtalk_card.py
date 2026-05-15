@@ -69,3 +69,8 @@ def test_draft_card_marks_missing_completion_criteria() -> None:
     card = build_draft_card(tdl)
 
     assert "完成标准：[待补充]" in card.body
+    assert [button.action for button in card.buttons] == [
+        "confirm",
+        "set_completion_criteria",
+        "cancel",
+    ]
