@@ -9,7 +9,10 @@ from app.services.reminder_service import (
     build_sendable_reminder_cards,
     count_yesterday_completions,
     mark_attention_tdls,
+    reminder_time_for_owner,
+    reminder_time_for_shift,
     run_reminder_cycle,
+    shift_type_for_owner,
 )
 
 
@@ -215,3 +218,71 @@ def test_count_yesterday_completions_uses_previous_calendar_day() -> None:
     )
 
     assert result == {"owner-1": 2}
+
+
+def test_reminder_time_for_shift_uses_tuesday_operations_override() -> None:
+    config = {
+        "reminders": {
+            "teacher_shift": "08:30",
+            "operations_shift": "08:30",
+            "operations_shift_tuesday": "10:00",
+            "standard_shift": "08:30",
+        }
+    }
+
+    assert reminder_time_for_shift(
+        "operations_shift",
+        as_of=datetime(2026, 5, 19, 8, 30, tzinfo=UTC),
+        config=config,
+    ) == "10:00"
+    assert reminder_time_for_shift(
+        "teacher_shift",
+        as_of=datetime(2026, 5, 19, 8, 30, tzinfo=UTC),
+        config=config,
+    ) == "08:30"
+
+
+def test_reminder_time_for_shift_falls_back_to_standard() -> None:
+    config = {"reminders": {"standard_shift": "08:30"}}
+
+    assert reminder_time_for_shift(
+        None,
+        as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+        config=config,
+    ) == "08:30"
+    assert reminder_time_for_shift(
+        "unknown_shift",
+        as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+        config=config,
+    ) == "08:30"
+
+
+def test_shift_type_for_owner_reads_explicit_roster_values() -> None:
+    roster = {
+        "management": [
+            {"dingtalk_user_id": "ops-1", "shift_type": "operations_shift"},
+            {"dingtalk_user_id": "special-1", "shift_type": None},
+        ]
+    }
+
+    assert shift_type_for_owner("ops-1", roster=roster) == "operations_shift"
+    assert shift_type_for_owner("special-1", roster=roster) is None
+    assert shift_type_for_owner("missing", roster=roster) is None
+
+
+def test_reminder_time_for_owner_uses_roster_shift_type() -> None:
+    roster = {"management": [{"dingtalk_user_id": "ops-1", "shift_type": "operations_shift"}]}
+    config = {
+        "reminders": {
+            "operations_shift": "08:30",
+            "operations_shift_tuesday": "10:00",
+            "standard_shift": "08:30",
+        }
+    }
+
+    assert reminder_time_for_owner(
+        "ops-1",
+        as_of=datetime(2026, 5, 19, 8, 30, tzinfo=UTC),
+        roster=roster,
+        config=config,
+    ) == "10:00"
