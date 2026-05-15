@@ -16,6 +16,7 @@ from app.schemas import (
 
 
 OPEN_STATUSES = {"active", "attention", "snoozed"}
+DEFAULT_SHIFT_TYPE = "standard_shift"
 
 
 def build_reminder_candidates(
@@ -210,3 +211,42 @@ def _previous_day_start(as_of: datetime) -> datetime:
 
 def _current_day_start(as_of: datetime) -> datetime:
     return as_of.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def reminder_time_for_shift(
+    shift_type: str | None,
+    *,
+    as_of: datetime,
+    config: dict | None = None,
+) -> str:
+    reminders = (config or load_yaml_config("dingtalk_config.yaml")).get("reminders", {})
+    resolved_shift = shift_type or DEFAULT_SHIFT_TYPE
+    if resolved_shift == "operations_shift" and as_of.weekday() == 1:
+        return reminders.get("operations_shift_tuesday", reminders.get("operations_shift", "08:30"))
+    return reminders.get(resolved_shift, reminders.get(DEFAULT_SHIFT_TYPE, "08:30"))
+
+
+def shift_type_for_owner(
+    owner_id: str,
+    *,
+    roster: dict | None = None,
+) -> str | None:
+    management = (roster or load_yaml_config("management_roster.yaml")).get("management", [])
+    for manager in management:
+        if manager.get("dingtalk_user_id") == owner_id:
+            return manager.get("shift_type")
+    return None
+
+
+def reminder_time_for_owner(
+    owner_id: str,
+    *,
+    as_of: datetime,
+    roster: dict | None = None,
+    config: dict | None = None,
+) -> str:
+    return reminder_time_for_shift(
+        shift_type_for_owner(owner_id, roster=roster),
+        as_of=as_of,
+        config=config,
+    )

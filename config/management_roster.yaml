@@ -6,6 +6,7 @@ management:
     english_name: Helen
     dingtalk_user_id: "0611436746849471"
     role: 创始人/CEO
+    shift_type: null
     scope: [两品牌所有运营事务最终拍板]
     reports_to: null
 
@@ -13,6 +14,7 @@ management:
     english_name: Teresa
     dingtalk_user_id: "0612430128789086"
     role: 励步教学重建负责人
+    shift_type: null
     scope: [励步教学团队换血, 新师培养, 管教务长/教务经理/班主任, 牵头周度教学会议]
     reports_to: 李珍
 
@@ -20,6 +22,7 @@ management:
     english_name: Frank
     dingtalk_user_id: "0617564550-1513038363"
     role: 斯坦教学负责人 + AI/薪资
+    shift_type: null
     scope: [斯坦教学磨课课制, 全公司薪资核算, AI体系搭建]
     reports_to: null
 
@@ -27,6 +30,7 @@ management:
     english_name: Allen
     dingtalk_user_id: "2800650646785267"
     role: 励步人力经理
+    shift_type: standard_shift
     scope: [励步招聘, 人力工作, 企业文化建设]
     reports_to: 李珍
 
@@ -34,6 +38,7 @@ management:
     english_name: Rachel
     dingtalk_user_id: "0124071122-1854742885"
     role: 斯坦人力经理
+    shift_type: standard_shift
     scope: [斯坦招聘, 人力工作, 企业文化建设]
     reports_to: 李珍
 
@@ -41,6 +46,7 @@ management:
     english_name: Sherry
     dingtalk_user_id: "0962151633-1819579479"
     role: 励步销售+市场经理
+    shift_type: operations_shift
     scope: [销售业绩管理, 新人培训, 市场活动, 抖音小红书, 直播]
     reports_to: 李珍
 
@@ -48,6 +54,7 @@ management:
     english_name: Sun
     dingtalk_user_id: "021801686333412178"
     role: 斯坦校长
+    shift_type: operations_shift
     scope: [斯坦销售部, 市场部, 教学部整体管理]
     reports_to: 李珍
 
@@ -55,6 +62,7 @@ management:
     english_name: null
     dingtalk_user_id: "17738196740967555"
     role: 斯坦教务长（候选/代理）
+    shift_type: teacher_shift
     scope: [教学续费, 教学管理, 比赛考级, 教师员工管理]
     reports_to: 苗雅楠
     escalation: observer  # 暂不纳入催收升级链
@@ -63,6 +71,7 @@ management:
     english_name: Doris
     dingtalk_user_id: "030750415466219153"
     role: 励步教务主管
+    shift_type: teacher_shift
     scope: [班主任工作, 家长端维护, 教师服务反馈]
     reports_to: 张蕾
 
@@ -70,6 +79,7 @@ management:
     english_name: Alice
     dingtalk_user_id: "062157571763350368"
     role: 励步绿谷校区教学主管
+    shift_type: teacher_shift
     scope: [绿谷校区英语教学管理, 带班]
     reports_to: 张蕾
 
@@ -77,6 +87,7 @@ management:
     english_name: Happy
     dingtalk_user_id: "062159046869494464"
     role: 励步教学培训
+    shift_type: teacher_shift
     scope: [教学培训, 带班]
     reports_to: 张蕾
 
@@ -84,5 +95,6 @@ management:
     english_name: Marvin
     dingtalk_user_id: "2763020351-1312457317"
     role: 励步鑫和校区教学管理
+    shift_type: teacher_shift
     scope: [鑫和校区全部教学管理]
     reports_to: 张蕾
