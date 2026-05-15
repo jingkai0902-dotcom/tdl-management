@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
-from app.integrations.dingtalk_card import build_reminder_card
+from app.integrations.dingtalk_card import build_reminder_card, render_markdown
+from app.integrations.dingtalk_client import DingTalkClient
 from app.models import AuditLog, TDL
 from app.schemas import (
     ReminderCandidateRead,
@@ -128,10 +129,17 @@ async def run_reminder_cycle(
     session: AsyncSession,
     *,
     as_of: datetime,
+    roster: dict | None = None,
+    dingtalk_config: dict | None = None,
 ) -> ReminderRunRead:
     result = await session.execute(select(TDL))
     tdls = list(result.scalars().all())
-    candidates = build_reminder_candidates(tdls, as_of=as_of)
+    candidates = filter_due_candidates_for_run(
+        build_reminder_candidates(tdls, as_of=as_of),
+        as_of=as_of,
+        roster=roster,
+        config=dingtalk_config,
+    )
     marked_attention = await mark_attention_tdls(session, candidates)
     completion_result = await session.execute(
         select(AuditLog).where(
@@ -156,6 +164,40 @@ async def run_reminder_cycle(
     )
 
 
+def filter_due_candidates_for_run(
+    candidates: list[ReminderCandidateRead],
+    *,
+    as_of: datetime,
+    roster: dict | None = None,
+    config: dict | None = None,
+) -> list[ReminderCandidateRead]:
+    current_time = as_of.strftime("%H:%M")
+    return [
+        candidate
+        for candidate in candidates
+        if reminder_time_for_owner(
+            candidate.owner_id,
+            as_of=as_of,
+            roster=roster,
+            config=config,
+        )
+        == current_time
+    ]
+
+
+async def send_reminder_dispatches(
+    client: DingTalkClient,
+    dispatches: list[ReminderDispatchRead],
+) -> int:
+    for dispatch in dispatches:
+        await client.send_work_markdown(
+            user_ids=[dispatch.owner_id],
+            title=dispatch.card.title,
+            text=render_markdown(dispatch.card),
+        )
+    return len(dispatches)
+
+
 def _is_remindable(tdl: TDL, as_of: datetime) -> bool:
     if tdl.status not in OPEN_STATUSES:
         return False
@@ -167,7 +209,10 @@ def _is_remindable(tdl: TDL, as_of: datetime) -> bool:
 
 
 def _overdue_days(tdl: TDL, as_of: datetime) -> int:
-    day_delta = as_of.date() - tdl.due_at.date()
+    due_at = tdl.due_at
+    if due_at is not None and due_at.tzinfo is not None and as_of.tzinfo is not None:
+        due_at = due_at.astimezone(as_of.tzinfo)
+    day_delta = as_of.date() - due_at.date()
     return day_delta.days
 
 

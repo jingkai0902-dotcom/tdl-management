@@ -11,3 +11,4 @@ pytest-asyncio>=0.25
 httpx>=0.28
 dingtalk-stream==0.24.3
 openai>=2.0
+apscheduler>=3.11,<4
