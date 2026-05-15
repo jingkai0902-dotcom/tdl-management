@@ -113,9 +113,19 @@ class TDLDraftUpdate(BaseModel):
     completion_criteria: str | None = None
 
 
-class TDLCardCallbackSubmission(BaseModel):
+class TDLCardTimeSubmission(BaseModel):
+    """Time-based card callback submissions: set_due_at, postpone, snooze."""
+
     due_at: datetime | None = None
     snooze_until: datetime | None = None
+
+
+class TDLCardOwnerSubmission(BaseModel):
+    owner_id: str | None = Field(default=None, min_length=1, max_length=128)
+
+
+class TDLCardCriteriaSubmission(BaseModel):
+    completion_criteria: str | None = Field(default=None, min_length=1)
 
 
 class BatchConfirmDraftsRequest(BaseModel):
