@@ -48,6 +48,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
             f"负责人：{tdl.owner_id or '[待补充]'}",
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
+            f"完成标准：{tdl.completion_criteria or '[待补充]'}",
         ],
         buttons=buttons,
         status="draft",

@@ -39,6 +39,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
             due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
             priority="P2",
             status="draft",
+            completion_criteria=None,
         )
 
     monkeypatch.setattr(

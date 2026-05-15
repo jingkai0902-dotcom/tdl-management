@@ -19,6 +19,7 @@ class StubTDL:
         )
         self.priority = "P1"
         self.status = status
+        self.completion_criteria = "提交最终方案"
 
 
 def test_draft_card_contains_confirm_action() -> None:
@@ -26,6 +27,7 @@ def test_draft_card_contains_confirm_action() -> None:
 
     assert card.status == "draft"
     assert [button.action for button in card.buttons] == ["confirm", "cancel"]
+    assert "完成标准：提交最终方案" in card.body
 
 
 def test_created_card_renders_markdown() -> None:
@@ -58,3 +60,12 @@ def test_draft_card_marks_all_missing_fields() -> None:
     card = build_draft_card(tdl)
 
     assert [button.action for button in card.buttons] == ["set_owner", "set_due_at", "cancel"]
+
+
+def test_draft_card_marks_missing_completion_criteria() -> None:
+    tdl = StubTDL("draft")
+    tdl.completion_criteria = None
+
+    card = build_draft_card(tdl)
+
+    assert "完成标准：[待补充]" in card.body

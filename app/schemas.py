@@ -29,6 +29,7 @@ class TDLRead(BaseModel):
     status: str
     priority: str
     source: str
+    completion_criteria: str | None = None
     missing_fields: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
 
@@ -45,6 +46,7 @@ class TDLRead(BaseModel):
                 "status": tdl.status,
                 "priority": tdl.priority,
                 "source": tdl.source,
+                "completion_criteria": tdl.completion_criteria,
                 "missing_fields": [
                     field_name
                     for field_name in ("owner_id", "due_at")
