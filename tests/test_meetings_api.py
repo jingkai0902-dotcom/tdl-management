@@ -57,6 +57,7 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.decisions[0].decision_id == decision_id
     assert result.tdls[0].tdl_id == tdl_id
     assert result.tdls[0].missing_fields == ["due_at"]
+    assert result.tdls[0].next_actions == ["set_due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
     assert [button.action for button in result.draft_cards[0].buttons] == ["set_due_at", "cancel"]
 
@@ -105,3 +106,5 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
     assert result.incomplete_count == 1
     assert len(result.ready_to_confirm_tdls) == 1
     assert len(result.incomplete_tdls) == 1
+    assert result.ready_to_confirm_tdls[0].next_actions == ["confirm"]
+    assert result.incomplete_tdls[0].next_actions == ["set_owner", "set_due_at"]

@@ -34,10 +34,26 @@ def _draft_tdl(*, owner_id=None, due_at=None) -> TDL:
         title="排定新师培训课表",
         owner_id=owner_id,
         due_at=due_at,
+        priority="P2",
         created_by="0617564550-1513038363",
         source="meeting_minutes",
         status="draft",
     )
+
+
+def test_tdl_read_next_actions_follow_missing_fields() -> None:
+    from app.schemas import TDLRead
+
+    incomplete = TDLRead.from_tdl(_draft_tdl())
+    complete = TDLRead.from_tdl(
+        _draft_tdl(
+            owner_id="0617564550-1513038363",
+            due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+        )
+    )
+
+    assert incomplete.next_actions == ["set_owner", "set_due_at"]
+    assert complete.next_actions == ["confirm"]
 
 
 @pytest.mark.asyncio

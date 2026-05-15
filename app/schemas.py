@@ -30,6 +30,7 @@ class TDLRead(BaseModel):
     priority: str
     source: str
     missing_fields: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -49,8 +50,20 @@ class TDLRead(BaseModel):
                     for field_name in ("owner_id", "due_at")
                     if getattr(tdl, field_name) is None
                 ],
+                "next_actions": cls._next_actions_for_tdl(tdl),
             }
         )
+
+    @staticmethod
+    def _next_actions_for_tdl(tdl) -> list[str]:
+        actions = []
+        if getattr(tdl, "owner_id") is None:
+            actions.append("set_owner")
+        if getattr(tdl, "due_at") is None:
+            actions.append("set_due_at")
+        if not actions:
+            actions.append("confirm")
+        return actions
 
 
 class DingTalkIncomingMessage(BaseModel):
