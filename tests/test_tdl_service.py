@@ -10,6 +10,7 @@ from app.services.tdl_service import (
     confirm_ready_drafts,
     confirm_tdl,
     postpone_tdl,
+    request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
 )
@@ -201,6 +202,17 @@ async def test_snooze_tdl_sets_resume_time_without_changing_due_date() -> None:
     assert snoozed.snooze_until == snooze_until
     assert snoozed.due_at == due_at
     assert session.items[-1].action == "snooze"
+
+
+@pytest.mark.asyncio
+async def test_request_help_marks_attention_and_writes_audit() -> None:
+    tdl = _active_tdl()
+    session = FakeSession(tdl)
+
+    requested = await request_help_tdl(session, tdl.tdl_id, "0617564550-1513038363")
+
+    assert requested.status == "attention"
+    assert session.items[-1].action == "need_help"
 
 
 @pytest.mark.asyncio

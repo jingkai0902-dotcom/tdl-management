@@ -75,6 +75,51 @@ def build_created_card(tdl: TDL) -> TDLCard:
     )
 
 
+def build_reminder_card(tdl: TDL, *, action: str, overdue_days: int) -> TDLCard:
+    if action == "due_today":
+        return TDLCard(
+            title="今日待办",
+            body=[
+                tdl.title,
+                f"截止：{_format_due_at(tdl.due_at)}",
+                "这条任务今天到期",
+            ],
+            buttons=[
+                CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
+                CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+            ],
+            status=tdl.status,
+        )
+    if action == "remind_owner":
+        return TDLCard(
+            title="任务提醒",
+            body=[
+                f"{tdl.title} 已逾期 {overdue_days} 天",
+                "这条任务可能需要关注",
+            ],
+            buttons=[
+                CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
+                CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+            ],
+            status=tdl.status,
+        )
+    if action == "ask_owner":
+        return TDLCard(
+            title="需要支持",
+            body=[
+                f"{tdl.title} 已逾期 {overdue_days} 天",
+                "需要关注一下吗？",
+            ],
+            buttons=[
+                CardButton(label="已完成", action="complete", tdl_id=tdl.tdl_id),
+                CardButton(label="延期", action="postpone", tdl_id=tdl.tdl_id),
+                CardButton(label="需协助", action="need_help", tdl_id=tdl.tdl_id),
+            ],
+            status=tdl.status,
+        )
+    raise ValueError(f"Unsupported reminder action: {action}")
+
+
 def render_markdown(card: TDLCard) -> str:
     lines = [f"## {card.title}", ""]
     lines.extend(card.body)

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
+from app.integrations.dingtalk_card import TDLCard, build_reminder_card
 from app.models import AuditLog, TDL
 from app.schemas import ReminderCandidateRead
 
@@ -76,6 +77,28 @@ async def mark_attention_tdls(
     for tdl in marked:
         await session.refresh(tdl)
     return marked
+
+
+def build_sendable_reminder_cards(
+    tdls: list[TDL],
+    candidates: list[ReminderCandidateRead],
+) -> list[TDLCard]:
+    tdl_by_id = {tdl.tdl_id: tdl for tdl in tdls}
+    cards = []
+    for candidate in candidates:
+        if candidate.action == "mark_attention":
+            continue
+        tdl = tdl_by_id.get(candidate.tdl_id)
+        if tdl is None:
+            continue
+        cards.append(
+            build_reminder_card(
+                tdl,
+                action=candidate.action,
+                overdue_days=candidate.overdue_days,
+            )
+        )
+    return cards
 
 
 def _is_remindable(tdl: TDL, as_of: datetime) -> bool:
