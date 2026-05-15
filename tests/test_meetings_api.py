@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -51,8 +52,56 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.tdl_count == 1
     assert result.ready_to_confirm_count == 0
     assert result.incomplete_count == 1
+    assert result.ready_to_confirm_tdls == []
+    assert result.incomplete_tdls[0].tdl_id == tdl_id
     assert result.decisions[0].decision_id == decision_id
     assert result.tdls[0].tdl_id == tdl_id
     assert result.tdls[0].missing_fields == ["due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
     assert [button.action for button in result.draft_cards[0].buttons] == ["set_due_at", "cancel"]
+
+
+@pytest.mark.asyncio
+async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(monkeypatch) -> None:
+    meeting_id = uuid4()
+
+    async def fake_parse_meeting_minutes(session, payload):
+        meeting = SimpleNamespace(meeting_id=meeting_id)
+        complete_tdl = SimpleNamespace(
+            tdl_id=uuid4(),
+            title="完成市场 SOP",
+            owner_id="0962151633-1819579479",
+            due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+            status="draft",
+            priority="P2",
+            source="meeting_minutes",
+        )
+        incomplete_tdl = SimpleNamespace(
+            tdl_id=uuid4(),
+            title="排定新师培训课表",
+            owner_id=None,
+            due_at=None,
+            status="draft",
+            priority="P2",
+            source="meeting_minutes",
+        )
+        return meeting, [], [complete_tdl, incomplete_tdl]
+
+    monkeypatch.setattr(
+        "app.api.meetings.parse_meeting_minutes",
+        fake_parse_meeting_minutes,
+    )
+
+    result = await parse_meeting_minutes_endpoint(
+        MeetingMinutesIngest(
+            title="励步 5 月月会",
+            source_text="市场 SOP",
+            created_by="0617564550-1513038363",
+        ),
+        session=None,
+    )
+
+    assert result.ready_to_confirm_count == 1
+    assert result.incomplete_count == 1
+    assert len(result.ready_to_confirm_tdls) == 1
+    assert len(result.incomplete_tdls) == 1

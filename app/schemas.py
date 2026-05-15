@@ -111,4 +111,6 @@ class MeetingParseRead(BaseModel):
     incomplete_count: int
     decisions: list[DecisionRead]
     tdls: list[TDLRead]
+    ready_to_confirm_tdls: list[TDLRead]
+    incomplete_tdls: list[TDLRead]
     draft_cards: list[TDLCardRead]
