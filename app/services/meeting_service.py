@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.ai_client import AIClient, get_ai_client
@@ -89,3 +90,20 @@ async def parse_meeting_minutes(
     await session.commit()
     await session.refresh(meeting)
     return meeting, decisions, tdls
+
+
+async def get_meeting_results(
+    session: AsyncSession,
+    meeting_id,
+) -> tuple[Meeting, list[Decision], list[TDL]]:
+    meeting = await session.get(Meeting, meeting_id)
+    if meeting is None:
+        raise ValueError("Meeting not found")
+
+    decisions_result = await session.execute(
+        select(Decision).where(Decision.meeting_id == meeting_id).order_by(Decision.created_at.asc())
+    )
+    tdls_result = await session.execute(
+        select(TDL).where(TDL.meeting_id == meeting_id).order_by(TDL.created_at.asc())
+    )
+    return meeting, list(decisions_result.scalars().all()), list(tdls_result.scalars().all())

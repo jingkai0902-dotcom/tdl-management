@@ -6,8 +6,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.integrations.ai_client import DecisionDraft
+from app.models import Decision, Meeting, TDL
 from app.schemas import MeetingMinutesIngest
-from app.services.meeting_service import parse_meeting_minutes
+from app.services.meeting_service import get_meeting_results, parse_meeting_minutes
 
 
 class FakeSession:
@@ -35,9 +36,30 @@ class FakeSession:
 
     async def get(self, model, identifier):
         for item in self.items:
-            if getattr(item, "tdl_id", None) == identifier:
+            if model is Meeting and getattr(item, "meeting_id", None) == identifier:
+                return item
+            if model is TDL and getattr(item, "tdl_id", None) == identifier:
                 return item
         return None
+
+    async def execute(self, statement):
+        model_name = statement.column_descriptions[0]["entity"].__name__
+        if model_name == "Decision":
+            rows = [item for item in self.items if isinstance(item, Decision)]
+        else:
+            rows = [item for item in self.items if isinstance(item, TDL)]
+        return FakeResult(rows)
+
+
+class FakeResult:
+    def __init__(self, rows) -> None:
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
 
 
 class FakeAIClient:
@@ -148,3 +170,36 @@ async def test_parse_realistic_libu_excerpt_creates_multiple_linked_drafts() -> 
     }
     assert [tdl.due_at for tdl in tdls].count(None) == 2
     assert tdls[2].due_at is not None
+
+
+@pytest.mark.asyncio
+async def test_get_meeting_results_returns_existing_meeting_artifacts() -> None:
+    session = FakeSession()
+    meeting = Meeting(title="励步 5 月月会", participants=[])
+    session.add(meeting)
+    await session.flush()
+    decision = Decision(
+        meeting_id=meeting.meeting_id,
+        title="完成市场 SOP",
+        owner_id="0962151633-1819579479",
+    )
+    session.add(decision)
+    await session.flush()
+    tdl = TDL(
+        meeting_id=meeting.meeting_id,
+        decision_id=decision.decision_id,
+        title="完成市场 SOP",
+        owner_id="0962151633-1819579479",
+        due_at=None,
+        created_by="0617564550-1513038363",
+        source="meeting_minutes",
+        status="draft",
+    )
+    session.add(tdl)
+    await session.flush()
+
+    found_meeting, decisions, tdls = await get_meeting_results(session, meeting.meeting_id)
+
+    assert found_meeting.meeting_id == meeting.meeting_id
+    assert decisions[0].decision_id == decision.decision_id
+    assert tdls[0].tdl_id == tdl.tdl_id

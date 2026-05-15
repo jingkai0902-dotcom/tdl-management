@@ -4,7 +4,9 @@ from uuid import uuid4
 
 import pytest
 
-from app.api.meetings import parse_meeting_minutes_endpoint
+from fastapi import HTTPException
+
+from app.api.meetings import get_meeting_results_endpoint, parse_meeting_minutes_endpoint
 from app.schemas import MeetingMinutesIngest
 
 
@@ -108,3 +110,44 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
     assert len(result.incomplete_tdls) == 1
     assert result.ready_to_confirm_tdls[0].next_actions == ["confirm"]
     assert result.incomplete_tdls[0].next_actions == ["set_owner", "set_due_at"]
+
+
+@pytest.mark.asyncio
+async def test_get_meeting_results_endpoint_reuses_parse_shape(monkeypatch) -> None:
+    meeting_id = uuid4()
+    tdl_id = uuid4()
+
+    async def fake_get_meeting_results(session, incoming_meeting_id):
+        assert incoming_meeting_id == meeting_id
+        meeting = SimpleNamespace(meeting_id=meeting_id)
+        tdl = SimpleNamespace(
+            tdl_id=tdl_id,
+            title="完成市场 SOP",
+            owner_id="0962151633-1819579479",
+            due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+            status="draft",
+            priority="P2",
+            source="meeting_minutes",
+        )
+        return meeting, [], [tdl]
+
+    monkeypatch.setattr("app.api.meetings.get_meeting_results", fake_get_meeting_results)
+
+    result = await get_meeting_results_endpoint(meeting_id, session=None)
+
+    assert result.meeting_id == meeting_id
+    assert result.ready_to_confirm_count == 1
+    assert result.ready_to_confirm_tdls[0].tdl_id == tdl_id
+
+
+@pytest.mark.asyncio
+async def test_get_meeting_results_endpoint_returns_404_for_missing_meeting(monkeypatch) -> None:
+    async def fake_get_meeting_results(session, meeting_id):
+        raise ValueError("Meeting not found")
+
+    monkeypatch.setattr("app.api.meetings.get_meeting_results", fake_get_meeting_results)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_meeting_results_endpoint(uuid4(), session=None)
+
+    assert exc.value.status_code == 404
