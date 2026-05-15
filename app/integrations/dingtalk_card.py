@@ -169,3 +169,13 @@ def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
 
 def build_card_action_id(action: str, tdl_id: UUID) -> str:
     return f"tdl::{action}::{tdl_id}"
+
+
+def parse_card_action_id(action_id: str) -> tuple[str, UUID] | None:
+    parts = action_id.split("::")
+    if len(parts) != 3 or parts[0] != "tdl":
+        return None
+    try:
+        return parts[1], UUID(parts[2])
+    except ValueError:
+        return None

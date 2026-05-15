@@ -6,6 +6,7 @@ from app.integrations.dingtalk_card import (
     build_created_card,
     build_draft_card,
     build_reminder_card,
+    parse_card_action_id,
     render_interactive_card_data,
     render_markdown,
 )
@@ -113,3 +114,13 @@ def test_render_interactive_card_data_keeps_button_actions() -> None:
     assert result["msgTitle"] == "需要支持"
     assert "审核课程方案 已逾期 2 天" in result["staticMsgContent"]
     assert build_card_action_id("complete", card.buttons[0].tdl_id) in result["sys_full_json_obj"]
+
+
+def test_parse_card_action_id_reads_action_and_tdl_id() -> None:
+    tdl_id = uuid4()
+
+    assert parse_card_action_id(build_card_action_id("complete", tdl_id)) == (
+        "complete",
+        tdl_id,
+    )
+    assert parse_card_action_id("bad-format") is None
