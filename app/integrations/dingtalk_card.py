@@ -27,6 +27,20 @@ def _format_due_at(value: datetime | None) -> str:
 
 
 def build_draft_card(tdl: TDL) -> TDLCard:
+    missing_fields = [
+        field_name
+        for field_name in ("owner_id", "due_at")
+        if getattr(tdl, field_name) is None
+    ]
+    buttons = []
+    if "owner_id" in missing_fields:
+        buttons.append(CardButton(label="补负责人", action="set_owner", tdl_id=tdl.tdl_id))
+    if "due_at" in missing_fields:
+        buttons.append(CardButton(label="补截止时间", action="set_due_at", tdl_id=tdl.tdl_id))
+    if not missing_fields:
+        buttons.append(CardButton(label="确认创建", action="confirm", tdl_id=tdl.tdl_id))
+    buttons.append(CardButton(label="忽略", action="cancel", tdl_id=tdl.tdl_id))
+
     return TDLCard(
         title="TDL 草稿",
         body=[
@@ -35,10 +49,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
         ],
-        buttons=[
-            CardButton(label="确认创建", action="confirm", tdl_id=tdl.tdl_id),
-            CardButton(label="忽略", action="cancel", tdl_id=tdl.tdl_id),
-        ],
+        buttons=buttons,
         status="draft",
     )
 

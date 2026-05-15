@@ -29,11 +29,14 @@ async def parse_meeting_minutes_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> MeetingParseRead:
     meeting, decisions, tdls = await parse_meeting_minutes(session, payload)
+    tdl_reads = [TDLRead.from_tdl(tdl) for tdl in tdls]
     return MeetingParseRead(
         meeting_id=meeting.meeting_id,
         decision_count=len(decisions),
         tdl_count=len(tdls),
+        ready_to_confirm_count=sum(not tdl.missing_fields for tdl in tdl_reads),
+        incomplete_count=sum(bool(tdl.missing_fields) for tdl in tdl_reads),
         decisions=[DecisionRead.model_validate(decision) for decision in decisions],
-        tdls=[TDLRead.from_tdl(tdl) for tdl in tdls],
+        tdls=tdl_reads,
         draft_cards=[TDLCardRead.model_validate(build_draft_card(tdl)) for tdl in tdls],
     )
