@@ -32,6 +32,7 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
             status="draft",
             priority="P2",
             source="meeting_minutes",
+            completion_criteria="形成正式 SOP",
         )
         return meeting, [decision], [tdl]
 
@@ -58,6 +59,7 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.incomplete_tdls[0].tdl_id == tdl_id
     assert result.decisions[0].decision_id == decision_id
     assert result.tdls[0].tdl_id == tdl_id
+    assert result.tdls[0].completion_criteria == "形成正式 SOP"
     assert result.tdls[0].missing_fields == ["due_at"]
     assert result.tdls[0].next_actions == ["set_due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
@@ -78,6 +80,7 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
             status="draft",
             priority="P2",
             source="meeting_minutes",
+            completion_criteria="形成正式 SOP",
         )
         incomplete_tdl = SimpleNamespace(
             tdl_id=uuid4(),
@@ -87,6 +90,7 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
             status="draft",
             priority="P2",
             source="meeting_minutes",
+            completion_criteria=None,
         )
         return meeting, [], [complete_tdl, incomplete_tdl]
 
@@ -128,6 +132,7 @@ async def test_get_meeting_results_endpoint_reuses_parse_shape(monkeypatch) -> N
             status="draft",
             priority="P2",
             source="meeting_minutes",
+            completion_criteria="形成正式 SOP",
         )
         return meeting, [], [tdl]
 

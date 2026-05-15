@@ -70,6 +70,7 @@ async def parse_meeting_minutes(
             title=draft.tdl_title,
             owner_id=draft.owner_id,
             due_at=draft.due_at,
+            completion_criteria=draft.completion_criteria,
             created_by=payload.created_by,
             source="meeting_minutes",
             status="draft",

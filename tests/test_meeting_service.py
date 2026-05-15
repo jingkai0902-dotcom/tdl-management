@@ -125,6 +125,7 @@ async def test_parse_meeting_minutes_creates_linked_draft_objects() -> None:
     assert tdls[0].decision_id == decisions[0].decision_id
     assert tdls[0].status == "draft"
     assert tdls[0].due_at is None
+    assert tdls[0].completion_criteria == "提交最终方案"
 
 
 @pytest.mark.asyncio
@@ -170,6 +171,7 @@ async def test_parse_realistic_libu_excerpt_creates_multiple_linked_drafts() -> 
     }
     assert [tdl.due_at for tdl in tdls].count(None) == 2
     assert tdls[2].due_at is not None
+    assert tdls[2].completion_criteria == "形成跨部门 SOP 并纳入教学交付标准"
 
 
 @pytest.mark.asyncio
