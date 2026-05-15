@@ -82,10 +82,16 @@ def test_draft_card_marks_missing_completion_criteria() -> None:
 
 
 def test_due_today_card_uses_daily_reminder_actions() -> None:
-    card = build_reminder_card(StubTDL("active"), action="due_today", overdue_days=0)
+    card = build_reminder_card(
+        StubTDL("active"),
+        action="due_today",
+        overdue_days=0,
+        yesterday_completed_count=3,
+    )
 
     assert card.title == "今日待办"
     assert "这条任务今天到期" in card.body
+    assert "昨天完成了 3 条" in card.body
     assert [button.action for button in card.buttons] == ["complete", "snooze"]
 
 

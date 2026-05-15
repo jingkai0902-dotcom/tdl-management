@@ -75,7 +75,18 @@ def build_created_card(tdl: TDL) -> TDLCard:
     )
 
 
-def build_reminder_card(tdl: TDL, *, action: str, overdue_days: int) -> TDLCard:
+def build_reminder_card(
+    tdl: TDL,
+    *,
+    action: str,
+    overdue_days: int,
+    yesterday_completed_count: int | None = None,
+) -> TDLCard:
+    completion_line = (
+        [f"昨天完成了 {yesterday_completed_count} 条"]
+        if yesterday_completed_count is not None
+        else []
+    )
     if action == "due_today":
         return TDLCard(
             title="今日待办",
@@ -83,6 +94,7 @@ def build_reminder_card(tdl: TDL, *, action: str, overdue_days: int) -> TDLCard:
                 tdl.title,
                 f"截止：{_format_due_at(tdl.due_at)}",
                 "这条任务今天到期",
+                *completion_line,
             ],
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
@@ -96,6 +108,7 @@ def build_reminder_card(tdl: TDL, *, action: str, overdue_days: int) -> TDLCard:
             body=[
                 f"{tdl.title} 已逾期 {overdue_days} 天",
                 "这条任务可能需要关注",
+                *completion_line,
             ],
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
@@ -109,6 +122,7 @@ def build_reminder_card(tdl: TDL, *, action: str, overdue_days: int) -> TDLCard:
             body=[
                 f"{tdl.title} 已逾期 {overdue_days} 天",
                 "需要关注一下吗？",
+                *completion_line,
             ],
             buttons=[
                 CardButton(label="已完成", action="complete", tdl_id=tdl.tdl_id),

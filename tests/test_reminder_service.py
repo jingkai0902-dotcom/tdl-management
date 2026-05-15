@@ -3,18 +3,20 @@ from uuid import uuid4
 
 import pytest
 
-from app.models import TDL
+from app.models import AuditLog, TDL
 from app.services.reminder_service import (
     build_reminder_candidates,
     build_sendable_reminder_cards,
+    count_yesterday_completions,
     mark_attention_tdls,
     run_reminder_cycle,
 )
 
 
 class FakeSession:
-    def __init__(self, *tdls: TDL) -> None:
+    def __init__(self, *tdls: TDL, audit_logs: list[AuditLog] | None = None) -> None:
         self.tdls = {tdl.tdl_id: tdl for tdl in tdls}
+        self.audit_logs = audit_logs or []
         self.items = []
 
     async def get(self, model, identifier):
@@ -30,6 +32,9 @@ class FakeSession:
         return None
 
     async def execute(self, statement):
+        model_name = statement.column_descriptions[0]["entity"].__name__
+        if model_name == "AuditLog":
+            return FakeResult(self.audit_logs)
         return FakeResult(list(self.tdls.values()))
 
 
@@ -61,6 +66,17 @@ def _tdl(
         priority="P2",
         created_by="owner-1",
         source="manual",
+    )
+
+
+def _audit(*, actor_id: str, created_at: datetime) -> AuditLog:
+    return AuditLog(
+        entity_type="tdl",
+        entity_id=str(uuid4()),
+        action="complete",
+        actor_id=actor_id,
+        payload={},
+        created_at=created_at,
     )
 
 
@@ -147,17 +163,32 @@ def test_build_sendable_reminder_cards_skips_mark_attention_candidates() -> None
         },
     )
 
-    dispatches = build_sendable_reminder_cards([due_today, day_two, day_three], candidates)
+    dispatches = build_sendable_reminder_cards(
+        [due_today, day_two, day_three],
+        candidates,
+        yesterday_completed_by_owner={"owner-1": 2},
+    )
 
     assert [dispatch.card.title for dispatch in dispatches] == ["今日待办", "需要支持"]
     assert [dispatch.owner_id for dispatch in dispatches] == ["owner-1", "owner-1"]
+    assert "昨天完成了 2 条" in dispatches[0].card.body
+    assert "昨天完成了 2 条" not in dispatches[1].card.body
 
 
 @pytest.mark.asyncio
 async def test_run_reminder_cycle_returns_dispatches_and_marks_attention() -> None:
     due_today = _tdl(due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC))
     day_three = _tdl(due_at=datetime(2026, 5, 15, 18, 0, tzinfo=UTC))
-    session = FakeSession(due_today, day_three)
+    session = FakeSession(
+        due_today,
+        day_three,
+        audit_logs=[
+            _audit(
+                actor_id="owner-1",
+                created_at=datetime(2026, 5, 17, 12, 0, tzinfo=UTC),
+            )
+        ],
+    )
 
     result = await run_reminder_cycle(
         session,
@@ -167,4 +198,20 @@ async def test_run_reminder_cycle_returns_dispatches_and_marks_attention() -> No
     assert result.candidate_count == 2
     assert result.marked_attention_count == 1
     assert [dispatch.card.title for dispatch in result.dispatches] == ["今日待办"]
+    assert "昨天完成了 1 条" in result.dispatches[0].card.body
     assert day_three.status == "attention"
+
+
+def test_count_yesterday_completions_uses_previous_calendar_day() -> None:
+    as_of = datetime(2026, 5, 18, 8, 30, tzinfo=UTC)
+
+    result = count_yesterday_completions(
+        [
+            _audit(actor_id="owner-1", created_at=datetime(2026, 5, 17, 0, 0, tzinfo=UTC)),
+            _audit(actor_id="owner-1", created_at=datetime(2026, 5, 17, 23, 59, tzinfo=UTC)),
+            _audit(actor_id="owner-2", created_at=datetime(2026, 5, 16, 23, 59, tzinfo=UTC)),
+        ],
+        as_of=as_of,
+    )
+
+    assert result == {"owner-1": 2}
