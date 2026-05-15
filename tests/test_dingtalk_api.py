@@ -5,8 +5,8 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.dingtalk_webhook import confirm_action, update_draft_action
-from app.schemas import DingTalkAction, TDLDraftUpdate
+from app.api.dingtalk_webhook import batch_confirm_drafts_action, confirm_action, update_draft_action
+from app.schemas import BatchConfirmDraftsRead, BatchConfirmDraftsRequest, DingTalkAction, TDLDraftUpdate, TDLRead
 
 
 @pytest.mark.asyncio
@@ -58,3 +58,57 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
 
     assert result.title == "TDL 草稿"
     assert "负责人：0617564550-1513038363" in result.body
+
+
+@pytest.mark.asyncio
+async def test_batch_confirm_drafts_action_returns_confirmed_and_skipped(monkeypatch) -> None:
+    confirmed_id = uuid4()
+    skipped_id = uuid4()
+
+    async def fake_confirm_ready_drafts(session, tdl_ids, actor_id):
+        assert tdl_ids == [confirmed_id, skipped_id]
+        assert actor_id == "user-1"
+        return BatchConfirmDraftsRead(
+            confirmed=[
+                TDLRead(
+                    tdl_id=confirmed_id,
+                    title="完成市场 SOP",
+                    owner_id="user-1",
+                    due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+                    status="active",
+                    priority="P2",
+                    source="meeting_minutes",
+                    missing_fields=[],
+                    next_actions=["confirm"],
+                )
+            ],
+            skipped=[
+                TDLRead(
+                    tdl_id=skipped_id,
+                    title="排定新师培训课表",
+                    owner_id=None,
+                    due_at=None,
+                    status="draft",
+                    priority="P2",
+                    source="meeting_minutes",
+                    missing_fields=["owner_id", "due_at"],
+                    next_actions=["set_owner", "set_due_at"],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.api.dingtalk_webhook.confirm_ready_drafts",
+        fake_confirm_ready_drafts,
+    )
+
+    result = await batch_confirm_drafts_action(
+        BatchConfirmDraftsRequest(
+            tdl_ids=[confirmed_id, skipped_id],
+            actor_id="user-1",
+        ),
+        session=None,
+    )
+
+    assert [tdl.tdl_id for tdl in result.confirmed] == [confirmed_id]
+    assert [tdl.tdl_id for tdl in result.skipped] == [skipped_id]

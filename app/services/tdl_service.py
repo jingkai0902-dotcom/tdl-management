@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuditLog, TDL
-from app.schemas import TDLCreate, TDLDraftCreate, TDLDraftUpdate
+from app.schemas import BatchConfirmDraftsRead, TDLCreate, TDLDraftCreate, TDLDraftUpdate, TDLRead
 
 
 async def create_tdl(session: AsyncSession, payload: TDLCreate) -> TDL:
@@ -99,6 +99,44 @@ async def update_draft_tdl(
     await session.commit()
     await session.refresh(tdl)
     return tdl
+
+
+async def confirm_ready_drafts(
+    session: AsyncSession,
+    tdl_ids: list,
+    actor_id: str,
+) -> BatchConfirmDraftsRead:
+    confirmed_entities = []
+    skipped = []
+
+    for tdl_id in tdl_ids:
+        tdl = await session.get(TDL, tdl_id)
+        if tdl is None:
+            continue
+        tdl_read = TDLRead.from_tdl(tdl)
+        if tdl.status != "draft" or tdl_read.missing_fields:
+            skipped.append(tdl_read)
+            continue
+        tdl.status = "active"
+        session.add(
+            AuditLog(
+                entity_type="tdl",
+                entity_id=str(tdl.tdl_id),
+                action="confirm",
+                actor_id=actor_id,
+                payload={"batch": True},
+            )
+        )
+        confirmed_entities.append(tdl)
+
+    await session.commit()
+    for tdl in confirmed_entities:
+        await session.refresh(tdl)
+
+    return BatchConfirmDraftsRead(
+        confirmed=[TDLRead.from_tdl(tdl) for tdl in confirmed_entities],
+        skipped=skipped,
+    )
 
 
 async def list_tdls(session: AsyncSession) -> list[TDL]:
