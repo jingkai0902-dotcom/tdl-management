@@ -1,8 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
-from app.integrations.dingtalk_client import DingTalkClient
+from app.integrations.dingtalk_client import DingTalkAPIError, DingTalkClient
 from app.models import AuditLog, TDL
+from app.schemas import BatchConfirmDraftsRead, TDLCreate
+from app.services.tdl_service import confirm_ready_drafts, confirm_tdl, create_tdl
 
 
 def _calendar_duration_minutes() -> int:
@@ -55,3 +57,84 @@ async def create_calendar_event_for_tdl(
     await session.commit()
     await session.refresh(tdl)
     return tdl
+
+
+async def sync_calendar_event_best_effort(
+    session: AsyncSession,
+    tdl: TDL,
+    *,
+    actor_id: str,
+    client: DingTalkClient | None = None,
+) -> TDL:
+    try:
+        return await create_calendar_event_for_tdl(
+            session,
+            tdl,
+            actor_id=actor_id,
+            client=client,
+        )
+    except DingTalkAPIError as exc:
+        session.add(
+            AuditLog(
+                entity_type="tdl",
+                entity_id=str(tdl.tdl_id),
+                action="calendar_create_failed",
+                actor_id=actor_id,
+                payload={"error": str(exc)},
+            )
+        )
+        await session.commit()
+        await session.refresh(tdl)
+        return tdl
+
+
+async def create_tdl_with_calendar(
+    session: AsyncSession,
+    payload: TDLCreate,
+    *,
+    client: DingTalkClient | None = None,
+) -> TDL:
+    tdl = await create_tdl(session, payload)
+    return await sync_calendar_event_best_effort(
+        session,
+        tdl,
+        actor_id=payload.created_by,
+        client=client,
+    )
+
+
+async def confirm_tdl_with_calendar(
+    session: AsyncSession,
+    tdl_id,
+    actor_id: str,
+    *,
+    client: DingTalkClient | None = None,
+) -> TDL:
+    tdl = await confirm_tdl(session, tdl_id, actor_id)
+    return await sync_calendar_event_best_effort(
+        session,
+        tdl,
+        actor_id=actor_id,
+        client=client,
+    )
+
+
+async def confirm_ready_drafts_with_calendar(
+    session: AsyncSession,
+    tdl_ids: list,
+    actor_id: str,
+    *,
+    client: DingTalkClient | None = None,
+) -> BatchConfirmDraftsRead:
+    result = await confirm_ready_drafts(session, tdl_ids, actor_id)
+    for confirmed_tdl in result.confirmed:
+        tdl = await session.get(TDL, confirmed_tdl.tdl_id)
+        if tdl is None:
+            continue
+        await sync_calendar_event_best_effort(
+            session,
+            tdl,
+            actor_id=actor_id,
+            client=client,
+        )
+    return result

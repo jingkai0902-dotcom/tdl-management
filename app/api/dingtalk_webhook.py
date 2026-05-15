@@ -13,10 +13,12 @@ from app.schemas import (
     TDLDraftUpdate,
 )
 from app.services.intake_service import intake_dingtalk_message
+from app.services.calendar_service import (
+    confirm_ready_drafts_with_calendar,
+    confirm_tdl_with_calendar,
+)
 from app.services.tdl_service import (
     complete_tdl,
-    confirm_ready_drafts,
-    confirm_tdl,
     postpone_tdl,
     request_help_tdl,
     snooze_tdl,
@@ -44,7 +46,7 @@ async def confirm_action(
     if payload.action != "confirm":
         raise HTTPException(status_code=400, detail="Unsupported action")
     try:
-        tdl = await confirm_tdl(session, payload.tdl_id, payload.actor_id)
+        tdl = await confirm_tdl_with_calendar(session, payload.tdl_id, payload.actor_id)
     except ValueError as exc:
         if "missing required fields" in str(exc):
             raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -139,4 +141,4 @@ async def batch_confirm_drafts_action(
     payload: BatchConfirmDraftsRequest,
     session: AsyncSession = Depends(get_session),
 ) -> BatchConfirmDraftsRead:
-    return await confirm_ready_drafts(session, payload.tdl_ids, payload.actor_id)
+    return await confirm_ready_drafts_with_calendar(session, payload.tdl_ids, payload.actor_id)
