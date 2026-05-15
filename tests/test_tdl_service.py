@@ -5,18 +5,16 @@ import pytest
 
 from app.models import TDL
 from app.schemas import TDLDraftUpdate
-from app.services.tdl_service import confirm_tdl, update_draft_tdl
+from app.services.tdl_service import confirm_ready_drafts, confirm_tdl, update_draft_tdl
 
 
 class FakeSession:
-    def __init__(self, tdl: TDL) -> None:
-        self.tdl = tdl
+    def __init__(self, *tdls: TDL) -> None:
+        self.tdls = {tdl.tdl_id: tdl for tdl in tdls}
         self.items = []
 
     async def get(self, model, identifier):
-        if identifier == self.tdl.tdl_id:
-            return self.tdl
-        return None
+        return self.tdls.get(identifier)
 
     def add(self, item) -> None:
         self.items.append(item)
@@ -87,3 +85,24 @@ async def test_update_draft_tdl_fills_missing_fields_before_confirm() -> None:
     assert confirmed.owner_id == "0617564550-1513038363"
     assert confirmed.due_at == due_at
     assert confirmed.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_confirm_ready_drafts_only_confirms_complete_items() -> None:
+    complete = _draft_tdl(
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
+    )
+    incomplete = _draft_tdl(owner_id="0617564550-1513038363")
+    session = FakeSession(complete, incomplete)
+
+    result = await confirm_ready_drafts(
+        session,
+        [complete.tdl_id, incomplete.tdl_id],
+        "0617564550-1513038363",
+    )
+
+    assert [tdl.tdl_id for tdl in result.confirmed] == [complete.tdl_id]
+    assert [tdl.tdl_id for tdl in result.skipped] == [incomplete.tdl_id]
+    assert complete.status == "active"
+    assert incomplete.status == "draft"

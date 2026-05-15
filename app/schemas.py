@@ -84,6 +84,16 @@ class TDLDraftUpdate(BaseModel):
     due_at: datetime | None = None
 
 
+class BatchConfirmDraftsRequest(BaseModel):
+    tdl_ids: list[UUID] = Field(min_length=1)
+    actor_id: str = Field(min_length=1, max_length=128)
+
+
+class BatchConfirmDraftsRead(BaseModel):
+    confirmed: list[TDLRead]
+    skipped: list[TDLRead]
+
+
 class CardButtonRead(BaseModel):
     label: str
     action: str

@@ -3,9 +3,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.integrations.dingtalk_card import build_created_card, build_draft_card
-from app.schemas import DingTalkAction, DingTalkIncomingMessage, TDLDraftUpdate
+from app.schemas import (
+    BatchConfirmDraftsRead,
+    BatchConfirmDraftsRequest,
+    DingTalkAction,
+    DingTalkIncomingMessage,
+    TDLDraftUpdate,
+)
 from app.services.intake_service import intake_dingtalk_message
-from app.services.tdl_service import confirm_tdl, update_draft_tdl
+from app.services.tdl_service import confirm_ready_drafts, confirm_tdl, update_draft_tdl
 
 
 router = APIRouter(prefix="/dingtalk", tags=["dingtalk"])
@@ -50,3 +56,11 @@ async def update_draft_action(
         status_code = 409 if "Only draft TDLs" in detail else 404
         raise HTTPException(status_code=status_code, detail=detail) from exc
     return build_draft_card(tdl)
+
+
+@router.post("/drafts/batch-confirm")
+async def batch_confirm_drafts_action(
+    payload: BatchConfirmDraftsRequest,
+    session: AsyncSession = Depends(get_session),
+) -> BatchConfirmDraftsRead:
+    return await confirm_ready_drafts(session, payload.tdl_ids, payload.actor_id)
