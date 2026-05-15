@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import load_yaml_config
+from app.integrations.dingtalk_client import DingTalkClient
 from app.models import AuditLog, TDL
 from app.schemas import WeeklyReportRead, WeeklyReportStaleTDLRead
 
@@ -125,3 +127,67 @@ async def generate_weekly_report(
         period_end=period_end,
         as_of=as_of,
     )
+
+
+def render_weekly_report_markdown(report: WeeklyReportRead) -> str:
+    stale_lines = [
+        f"- {item.title}：{item.days_without_progress} 天未推进"
+        for item in report.stale_tdls
+    ] or ["- 无"]
+    waiting_lines = [
+        f"- {owner_id}：{count} 条"
+        for owner_id, count in sorted(report.waiting_by_user.items())
+    ] or ["- 无"]
+    business_lines = [
+        f"- {business_line}：{count} 条"
+        for business_line, count in sorted(report.created_by_business_line.items())
+    ] or ["- 无"]
+    return "\n".join(
+        [
+            "## 周报事实账本",
+            "",
+            f"- 新增：{report.created_count}",
+            f"- 完成：{report.completed_count}",
+            f"- 逾期未完成：{report.overdue_open_count}",
+            f"- 本周延期：{report.postponed_count}",
+            f"- 等待中：{report.waiting_count}",
+            f"- 阻塞中：{report.blocked_count}",
+            f"- 下周到期：{report.due_next_week_count}",
+            "",
+            "### 等待对象",
+            *waiting_lines,
+            "",
+            "### 超过 3 天未推进",
+            *stale_lines,
+            "",
+            "### 新增任务按业务线",
+            *business_lines,
+        ]
+    )
+
+
+def weekly_report_recipients(config: dict | None = None) -> list[str]:
+    weekly_report = (config or load_yaml_config("dingtalk_config.yaml")).get(
+        "weekly_report",
+        {},
+    )
+    return list(weekly_report.get("recipient_user_ids", []))
+
+
+async def send_weekly_report(
+    client: DingTalkClient,
+    report: WeeklyReportRead,
+    *,
+    recipient_user_ids: list[str] | None = None,
+) -> int:
+    recipients = (
+        recipient_user_ids if recipient_user_ids is not None else weekly_report_recipients()
+    )
+    if not recipients:
+        return 0
+    await client.send_work_markdown(
+        user_ids=recipients,
+        title="周报事实账本",
+        text=render_weekly_report_markdown(report),
+    )
+    return len(recipients)
