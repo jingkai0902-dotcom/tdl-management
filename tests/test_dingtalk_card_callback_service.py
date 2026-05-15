@@ -7,6 +7,7 @@ from app.integrations.dingtalk_card import build_card_action_id
 from app.services.dingtalk_card_callback_service import (
     FOLLOW_UP_SUBMITTERS,
     ONE_CLICK_ACTIONS,
+    _management_owner_ids,
     handle_tdl_card_callback,
 )
 
@@ -66,6 +67,52 @@ async def test_handle_tdl_card_callback_returns_owner_follow_up() -> None:
     assert result.action == "set_owner"
     assert result.next_action == "collect_owner_id"
     assert result.required_fields == ["owner_id"]
+
+
+def test_management_owner_ids_reads_management_roster() -> None:
+    assert "0617564550-1513038363" in _management_owner_ids()
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_submits_valid_owner(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_update_draft_tdl(session, incoming_tdl_id, payload, actor_id):
+        assert session == "session"
+        assert incoming_tdl_id == tdl_id
+        assert actor_id == "user-1"
+        assert payload.owner_id == "0617564550-1513038363"
+        return SimpleNamespace(tdl_id=tdl_id, status="draft")
+
+    monkeypatch.setattr(
+        "app.services.dingtalk_card_callback_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_owner", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"owner_id": "0617564550-1513038363"},
+    )
+
+    assert result.handled is True
+    assert result.status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_rejects_owner_outside_roster() -> None:
+    tdl_id = uuid4()
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_owner", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"owner_id": "outsider"},
+    )
+
+    assert result.handled is False
+    assert result.next_action == "collect_owner_id"
 
 
 @pytest.mark.asyncio
@@ -137,3 +184,31 @@ async def test_handle_tdl_card_callback_submits_snooze(monkeypatch) -> None:
 
     assert result.handled is True
     assert result.status == "snoozed"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_submits_completion_criteria(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        assert session == "session"
+        assert actor_id == "user-1"
+        assert submission.completion_criteria == "形成可执行课表"
+        return SimpleNamespace(tdl_id=tdl_id, status="draft")
+
+    monkeypatch.setitem(
+        FOLLOW_UP_SUBMITTERS,
+        "set_completion_criteria",
+        fake_submitter,
+    )
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_completion_criteria", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"completion_criteria": "形成可执行课表"},
+    )
+
+    assert result.handled is True
+    assert result.action == "set_completion_criteria"
+    assert result.status == "draft"

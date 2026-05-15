@@ -1,10 +1,17 @@
 from dataclasses import dataclass
+import logging
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import load_yaml_config
 from app.integrations.dingtalk_card import parse_card_action_id
-from app.schemas import TDLCardCallbackSubmission, TDLDraftUpdate
+from app.schemas import (
+    TDLCardCriteriaSubmission,
+    TDLCardOwnerSubmission,
+    TDLCardTimeSubmission,
+    TDLDraftUpdate,
+)
 from app.services.tdl_service import (
     complete_tdl,
     confirm_tdl,
@@ -13,6 +20,8 @@ from app.services.tdl_service import (
     snooze_tdl,
     update_draft_tdl,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -43,12 +52,38 @@ FOLLOW_UP_ACTIONS = {
 }
 
 
+def _management_owner_ids() -> set[str]:
+    roster = load_yaml_config("management_roster.yaml")
+    return {
+        member["dingtalk_user_id"]
+        for member in roster.get("management", [])
+        if member.get("dingtalk_user_id")
+    }
+
+
+async def _submit_set_owner(
+    session: AsyncSession,
+    *,
+    tdl_id,
+    actor_id: str,
+    submission: TDLCardOwnerSubmission,
+):
+    if submission.owner_id is None or submission.owner_id not in _management_owner_ids():
+        return None
+    return await update_draft_tdl(
+        session,
+        tdl_id,
+        TDLDraftUpdate(owner_id=submission.owner_id),
+        actor_id,
+    )
+
+
 async def _submit_set_due_at(
     session: AsyncSession,
     *,
     tdl_id,
     actor_id: str,
-    submission: TDLCardCallbackSubmission,
+    submission: TDLCardTimeSubmission,
 ):
     if submission.due_at is None:
         return None
@@ -65,7 +100,7 @@ async def _submit_postpone(
     *,
     tdl_id,
     actor_id: str,
-    submission: TDLCardCallbackSubmission,
+    submission: TDLCardTimeSubmission,
 ):
     if submission.due_at is None:
         return None
@@ -82,7 +117,7 @@ async def _submit_snooze(
     *,
     tdl_id,
     actor_id: str,
-    submission: TDLCardCallbackSubmission,
+    submission: TDLCardTimeSubmission,
 ):
     if submission.snooze_until is None:
         return None
@@ -94,10 +129,37 @@ async def _submit_snooze(
     )
 
 
+async def _submit_completion_criteria(
+    session: AsyncSession,
+    *,
+    tdl_id,
+    actor_id: str,
+    submission: TDLCardCriteriaSubmission,
+):
+    if submission.completion_criteria is None:
+        return None
+    return await update_draft_tdl(
+        session,
+        tdl_id,
+        TDLDraftUpdate(completion_criteria=submission.completion_criteria),
+        actor_id,
+    )
+
+
 FOLLOW_UP_SUBMITTERS = {
+    "set_owner": _submit_set_owner,
     "set_due_at": _submit_set_due_at,
     "postpone": _submit_postpone,
     "snooze": _submit_snooze,
+    "set_completion_criteria": _submit_completion_criteria,
+}
+
+FOLLOW_UP_SUBMISSION_MODELS = {
+    "set_owner": TDLCardOwnerSubmission,
+    "set_due_at": TDLCardTimeSubmission,
+    "postpone": TDLCardTimeSubmission,
+    "snooze": TDLCardTimeSubmission,
+    "set_completion_criteria": TDLCardCriteriaSubmission,
 }
 
 
@@ -117,12 +179,14 @@ async def handle_tdl_card_callback(
         follow_up = FOLLOW_UP_ACTIONS.get(action)
         if follow_up is None:
             return CardCallbackResult(handled=False, action=action, tdl_id=str(tdl_id))
-        try:
-            submission = TDLCardCallbackSubmission.model_validate(submitted_fields or {})
-        except ValidationError:
-            submission = TDLCardCallbackSubmission()
         submitter = FOLLOW_UP_SUBMITTERS.get(action)
-        if submitter is not None:
+        submission_model = FOLLOW_UP_SUBMISSION_MODELS.get(action)
+        if submitter is not None and submission_model is not None:
+            try:
+                submission = submission_model.model_validate(submitted_fields or {})
+            except ValidationError as exc:
+                logger.debug("Card callback submission validation failed: %s", exc)
+                submission = submission_model()
             tdl = await submitter(
                 session,
                 tdl_id=tdl_id,
