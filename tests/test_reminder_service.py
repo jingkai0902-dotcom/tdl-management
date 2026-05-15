@@ -8,6 +8,7 @@ from app.services.reminder_service import (
     build_reminder_candidates,
     build_sendable_reminder_cards,
     mark_attention_tdls,
+    run_reminder_cycle,
 )
 
 
@@ -27,6 +28,20 @@ class FakeSession:
 
     async def refresh(self, item) -> None:
         return None
+
+    async def execute(self, statement):
+        return FakeResult(list(self.tdls.values()))
+
+
+class FakeResult:
+    def __init__(self, rows) -> None:
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
 
 
 def _tdl(
@@ -132,6 +147,24 @@ def test_build_sendable_reminder_cards_skips_mark_attention_candidates() -> None
         },
     )
 
-    cards = build_sendable_reminder_cards([due_today, day_two, day_three], candidates)
+    dispatches = build_sendable_reminder_cards([due_today, day_two, day_three], candidates)
 
-    assert [card.title for card in cards] == ["今日待办", "需要支持"]
+    assert [dispatch.card.title for dispatch in dispatches] == ["今日待办", "需要支持"]
+    assert [dispatch.owner_id for dispatch in dispatches] == ["owner-1", "owner-1"]
+
+
+@pytest.mark.asyncio
+async def test_run_reminder_cycle_returns_dispatches_and_marks_attention() -> None:
+    due_today = _tdl(due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC))
+    day_three = _tdl(due_at=datetime(2026, 5, 15, 18, 0, tzinfo=UTC))
+    session = FakeSession(due_today, day_three)
+
+    result = await run_reminder_cycle(
+        session,
+        as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+    )
+
+    assert result.candidate_count == 2
+    assert result.marked_attention_count == 1
+    assert [dispatch.card.title for dispatch in result.dispatches] == ["今日待办"]
+    assert day_three.status == "attention"
