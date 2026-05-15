@@ -12,8 +12,12 @@ from app.services.calendar_service import (
     confirm_tdl_with_calendar,
     create_calendar_event_for_tdl,
     create_tdl_with_calendar,
+    postpone_tdl_with_calendar,
     should_create_calendar_event,
+    should_update_calendar_event,
+    sync_calendar_due_at_change_best_effort,
     sync_calendar_event_best_effort,
+    update_calendar_event_for_tdl,
 )
 
 
@@ -64,6 +68,15 @@ def test_should_create_calendar_event_only_accepts_active_complete_tdls() -> Non
     assert should_create_calendar_event(already_synced) is False
 
 
+def test_should_update_calendar_event_requires_existing_calendar_event() -> None:
+    synced = _active_tdl()
+    synced.calendar_event_id = "evt-1"
+    unsynced = _active_tdl()
+
+    assert should_update_calendar_event(synced) is True
+    assert should_update_calendar_event(unsynced) is False
+
+
 @pytest.mark.asyncio
 async def test_create_calendar_event_for_tdl_writes_event_id_and_audit() -> None:
     tdl = _active_tdl()
@@ -91,6 +104,29 @@ async def test_create_calendar_event_for_tdl_writes_event_id_and_audit() -> None
     assert synced.calendar_event_id == "evt-1"
     assert session.items[-1].action == "calendar_create"
     assert session.items[-1].payload == {"calendar_event_id": "evt-1"}
+
+
+@pytest.mark.asyncio
+async def test_update_calendar_event_for_tdl_writes_audit() -> None:
+    tdl = _active_tdl()
+    tdl.calendar_event_id = "evt-1"
+    session = FakeSession()
+
+    class FakeDingTalkClient:
+        async def update_tdl_calendar_event(self, **kwargs):
+            assert kwargs["event_id"] == "evt-1"
+            assert kwargs["due_at"] == datetime(2026, 5, 20, 18, 0, tzinfo=UTC)
+            return "evt-1"
+
+    synced = await update_calendar_event_for_tdl(
+        session,
+        tdl,
+        actor_id="system",
+        client=FakeDingTalkClient(),
+    )
+
+    assert synced.calendar_event_id == "evt-1"
+    assert session.items[-1].action == "calendar_update"
 
 
 @pytest.mark.asyncio
@@ -178,6 +214,86 @@ async def test_sync_calendar_event_best_effort_keeps_tdl_when_dingtalk_fails(mon
 
 
 @pytest.mark.asyncio
+async def test_sync_calendar_due_at_change_best_effort_updates_existing_event(monkeypatch) -> None:
+    tdl = _active_tdl()
+    tdl.calendar_event_id = "evt-1"
+    session = FakeSession()
+
+    async def fake_update_calendar_event_for_tdl(session, incoming_tdl, *, actor_id, client):
+        assert incoming_tdl == tdl
+        assert actor_id == "actor-1"
+        assert client == "client"
+        return incoming_tdl
+
+    monkeypatch.setattr(
+        "app.services.calendar_service.update_calendar_event_for_tdl",
+        fake_update_calendar_event_for_tdl,
+    )
+
+    result = await sync_calendar_due_at_change_best_effort(
+        session,
+        tdl,
+        actor_id="actor-1",
+        client="client",
+    )
+
+    assert result == tdl
+
+
+@pytest.mark.asyncio
+async def test_sync_calendar_due_at_change_best_effort_keeps_tdl_when_update_fails(
+    monkeypatch,
+) -> None:
+    tdl = _active_tdl()
+    tdl.calendar_event_id = "evt-1"
+    session = FakeSession()
+
+    async def fake_update_calendar_event_for_tdl(*args, **kwargs):
+        raise DingTalkAPIError("calendar unavailable")
+
+    monkeypatch.setattr(
+        "app.services.calendar_service.update_calendar_event_for_tdl",
+        fake_update_calendar_event_for_tdl,
+    )
+
+    result = await sync_calendar_due_at_change_best_effort(
+        session,
+        tdl,
+        actor_id="actor-1",
+        client="client",
+    )
+
+    assert result == tdl
+    assert session.items[-1].action == "calendar_update_failed"
+
+
+@pytest.mark.asyncio
+async def test_sync_calendar_due_at_change_best_effort_creates_missing_event(monkeypatch) -> None:
+    tdl = _active_tdl()
+    session = FakeSession()
+
+    async def fake_sync_calendar_event_best_effort(session, incoming_tdl, *, actor_id, client):
+        assert incoming_tdl == tdl
+        assert actor_id == "actor-1"
+        assert client == "client"
+        return incoming_tdl
+
+    monkeypatch.setattr(
+        "app.services.calendar_service.sync_calendar_event_best_effort",
+        fake_sync_calendar_event_best_effort,
+    )
+
+    result = await sync_calendar_due_at_change_best_effort(
+        session,
+        tdl,
+        actor_id="actor-1",
+        client="client",
+    )
+
+    assert result == tdl
+
+
+@pytest.mark.asyncio
 async def test_confirm_ready_drafts_with_calendar_syncs_confirmed_items(monkeypatch) -> None:
     tdl = _active_tdl()
     session = FakeSession(tdl)
@@ -224,3 +340,38 @@ async def test_confirm_ready_drafts_with_calendar_syncs_confirmed_items(monkeypa
 
     assert [item.tdl_id for item in result.confirmed] == [tdl.tdl_id]
     assert synced == [(tdl, "actor-1", "client")]
+
+
+@pytest.mark.asyncio
+async def test_postpone_tdl_with_calendar_updates_due_date_and_calendar(monkeypatch) -> None:
+    tdl = _active_tdl()
+    new_due_at = datetime(2026, 5, 22, 18, 0, tzinfo=UTC)
+
+    async def fake_postpone_tdl(session, incoming_tdl_id, *, due_at, actor_id):
+        assert incoming_tdl_id == tdl.tdl_id
+        assert due_at == new_due_at
+        assert actor_id == "actor-1"
+        tdl.due_at = due_at
+        return tdl
+
+    async def fake_sync_calendar_due_at_change_best_effort(session, incoming_tdl, *, actor_id, client):
+        assert incoming_tdl == tdl
+        assert actor_id == "actor-1"
+        assert client == "client"
+        return incoming_tdl
+
+    monkeypatch.setattr("app.services.calendar_service.postpone_tdl", fake_postpone_tdl)
+    monkeypatch.setattr(
+        "app.services.calendar_service.sync_calendar_due_at_change_best_effort",
+        fake_sync_calendar_due_at_change_best_effort,
+    )
+
+    result = await postpone_tdl_with_calendar(
+        "session",
+        tdl.tdl_id,
+        due_at=new_due_at,
+        actor_id="actor-1",
+        client="client",
+    )
+
+    assert result.due_at == new_due_at

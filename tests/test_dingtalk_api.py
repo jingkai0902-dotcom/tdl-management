@@ -165,13 +165,16 @@ async def test_postpone_action_updates_due_at(monkeypatch) -> None:
     tdl_id = uuid4()
     due_at = datetime(2026, 5, 22, 18, 0, tzinfo=UTC)
 
-    async def fake_postpone_tdl(session, incoming_tdl_id, *, due_at, actor_id):
+    async def fake_postpone_tdl_with_calendar(session, incoming_tdl_id, *, due_at, actor_id):
         assert incoming_tdl_id == tdl_id
         assert due_at == datetime(2026, 5, 22, 18, 0, tzinfo=UTC)
         assert actor_id == "0617564550-1513038363"
         return SimpleNamespace(tdl_id=tdl_id, due_at=due_at)
 
-    monkeypatch.setattr("app.api.dingtalk_webhook.postpone_tdl", fake_postpone_tdl)
+    monkeypatch.setattr(
+        "app.api.dingtalk_webhook.postpone_tdl_with_calendar",
+        fake_postpone_tdl_with_calendar,
+    )
 
     result = await postpone_action(
         TDLPostponeAction(
