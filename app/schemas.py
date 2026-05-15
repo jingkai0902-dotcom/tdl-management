@@ -95,6 +95,18 @@ class DingTalkAction(BaseModel):
     actor_id: str
 
 
+class TDLPostponeAction(BaseModel):
+    tdl_id: UUID
+    actor_id: str = Field(min_length=1, max_length=128)
+    due_at: datetime
+
+
+class TDLSnoozeAction(BaseModel):
+    tdl_id: UUID
+    actor_id: str = Field(min_length=1, max_length=128)
+    snooze_until: datetime
+
+
 class TDLDraftUpdate(BaseModel):
     owner_id: str | None = Field(default=None, min_length=1, max_length=128)
     due_at: datetime | None = None

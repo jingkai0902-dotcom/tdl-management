@@ -8,10 +8,19 @@ from app.schemas import (
     BatchConfirmDraftsRequest,
     DingTalkAction,
     DingTalkIncomingMessage,
+    TDLPostponeAction,
+    TDLSnoozeAction,
     TDLDraftUpdate,
 )
 from app.services.intake_service import intake_dingtalk_message
-from app.services.tdl_service import confirm_ready_drafts, confirm_tdl, update_draft_tdl
+from app.services.tdl_service import (
+    complete_tdl,
+    confirm_ready_drafts,
+    confirm_tdl,
+    postpone_tdl,
+    snooze_tdl,
+    update_draft_tdl,
+)
 
 
 router = APIRouter(prefix="/dingtalk", tags=["dingtalk"])
@@ -40,6 +49,57 @@ async def confirm_action(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return build_created_card(tdl)
+
+
+@router.post("/actions/complete")
+async def complete_action(
+    payload: DingTalkAction,
+    session: AsyncSession = Depends(get_session),
+):
+    if payload.action != "complete":
+        raise HTTPException(status_code=400, detail="Unsupported action")
+    try:
+        return await complete_tdl(session, payload.tdl_id, payload.actor_id)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "lifecycle actions" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/actions/postpone")
+async def postpone_action(
+    payload: TDLPostponeAction,
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        return await postpone_tdl(
+            session,
+            payload.tdl_id,
+            due_at=payload.due_at,
+            actor_id=payload.actor_id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "lifecycle actions" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/actions/snooze")
+async def snooze_action(
+    payload: TDLSnoozeAction,
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        return await snooze_tdl(
+            session,
+            payload.tdl_id,
+            snooze_until=payload.snooze_until,
+            actor_id=payload.actor_id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "lifecycle actions" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.patch("/drafts/{tdl_id}")
