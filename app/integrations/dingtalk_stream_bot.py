@@ -54,6 +54,7 @@ class TDLCardCallbackHandler(CallbackHandler):
                 session,
                 action_id=action_id,
                 actor_id=actor_id,
+                submitted_fields=params,
             )
         return AckMessage.STATUS_OK, {
             "handled": result.handled,

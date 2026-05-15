@@ -113,6 +113,11 @@ class TDLDraftUpdate(BaseModel):
     completion_criteria: str | None = None
 
 
+class TDLCardCallbackSubmission(BaseModel):
+    due_at: datetime | None = None
+    snooze_until: datetime | None = None
+
+
 class BatchConfirmDraftsRequest(BaseModel):
     tdl_ids: list[UUID] = Field(min_length=1)
     actor_id: str = Field(min_length=1, max_length=128)
