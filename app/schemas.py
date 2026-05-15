@@ -187,3 +187,11 @@ class WeeklyReportRead(BaseModel):
     stale_tdls: list[WeeklyReportStaleTDLRead]
     due_next_week_count: int
     created_by_business_line: dict[str, int]
+
+
+class ReminderCandidateRead(BaseModel):
+    tdl_id: UUID
+    owner_id: str
+    title: str
+    action: str
+    overdue_days: int
