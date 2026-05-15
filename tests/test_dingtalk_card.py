@@ -38,6 +38,7 @@ def test_draft_card_marks_missing_due_at() -> None:
     card = build_draft_card(StubTDL("draft", due_at=None))
 
     assert "截止：[待补充]" in card.body
+    assert [button.action for button in card.buttons] == ["set_due_at", "cancel"]
 
 
 def test_draft_card_marks_missing_owner() -> None:
@@ -47,3 +48,13 @@ def test_draft_card_marks_missing_owner() -> None:
     card = build_draft_card(tdl)
 
     assert "负责人：[待补充]" in card.body
+    assert [button.action for button in card.buttons] == ["set_owner", "cancel"]
+
+
+def test_draft_card_marks_all_missing_fields() -> None:
+    tdl = StubTDL("draft", due_at=None)
+    tdl.owner_id = None
+
+    card = build_draft_card(tdl)
+
+    assert [button.action for button in card.buttons] == ["set_owner", "set_due_at", "cancel"]

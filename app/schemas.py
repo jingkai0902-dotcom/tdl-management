@@ -107,6 +107,8 @@ class MeetingParseRead(BaseModel):
     meeting_id: UUID
     decision_count: int
     tdl_count: int
+    ready_to_confirm_count: int
+    incomplete_count: int
     decisions: list[DecisionRead]
     tdls: list[TDLRead]
     draft_cards: list[TDLCardRead]
