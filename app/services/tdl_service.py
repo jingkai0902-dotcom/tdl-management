@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuditLog, TDL
-from app.schemas import TDLCreate, TDLDraftCreate
+from app.schemas import TDLCreate, TDLDraftCreate, TDLDraftUpdate
 
 
 async def create_tdl(session: AsyncSession, payload: TDLCreate) -> TDL:
@@ -49,6 +49,13 @@ async def confirm_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     tdl = await session.get(TDL, tdl_id)
     if tdl is None:
         raise ValueError("TDL not found")
+    missing_fields = [
+        field_name
+        for field_name in ("owner_id", "due_at")
+        if getattr(tdl, field_name) is None
+    ]
+    if missing_fields:
+        raise ValueError(f"TDL draft missing required fields: {', '.join(missing_fields)}")
     tdl.status = "active"
     session.add(
         AuditLog(
@@ -57,6 +64,36 @@ async def confirm_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
             action="confirm",
             actor_id=actor_id,
             payload={},
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    return tdl
+
+
+async def update_draft_tdl(
+    session: AsyncSession,
+    tdl_id,
+    payload: TDLDraftUpdate,
+    actor_id: str,
+) -> TDL:
+    tdl = await session.get(TDL, tdl_id)
+    if tdl is None:
+        raise ValueError("TDL not found")
+    if tdl.status != "draft":
+        raise ValueError("Only draft TDLs can be updated through draft completion")
+
+    updates = payload.model_dump(exclude_none=True)
+    for field_name, value in updates.items():
+        setattr(tdl, field_name, value)
+
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="draft_update",
+            actor_id=actor_id,
+            payload=payload.model_dump(mode="json", exclude_none=True),
         )
     )
     await session.commit()

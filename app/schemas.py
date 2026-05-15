@@ -29,8 +29,28 @@ class TDLRead(BaseModel):
     status: str
     priority: str
     source: str
+    missing_fields: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_tdl(cls, tdl) -> "TDLRead":
+        return cls.model_validate(
+            {
+                "tdl_id": tdl.tdl_id,
+                "title": tdl.title,
+                "owner_id": tdl.owner_id,
+                "due_at": tdl.due_at,
+                "status": tdl.status,
+                "priority": tdl.priority,
+                "source": tdl.source,
+                "missing_fields": [
+                    field_name
+                    for field_name in ("owner_id", "due_at")
+                    if getattr(tdl, field_name) is None
+                ],
+            }
+        )
 
 
 class DingTalkIncomingMessage(BaseModel):
@@ -44,6 +64,11 @@ class DingTalkAction(BaseModel):
     action: str
     tdl_id: UUID
     actor_id: str
+
+
+class TDLDraftUpdate(BaseModel):
+    owner_id: str | None = Field(default=None, min_length=1, max_length=128)
+    due_at: datetime | None = None
 
 
 class CardButtonRead(BaseModel):

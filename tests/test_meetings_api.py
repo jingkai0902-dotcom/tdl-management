@@ -51,5 +51,6 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.tdl_count == 1
     assert result.decisions[0].decision_id == decision_id
     assert result.tdls[0].tdl_id == tdl_id
+    assert result.tdls[0].missing_fields == ["due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
     assert result.draft_cards[0].buttons[0].action == "confirm"
