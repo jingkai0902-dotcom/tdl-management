@@ -6,3 +6,4 @@ reminders:
 
 calendar:
   provider: dingtalk
+  default_duration_minutes: 30
