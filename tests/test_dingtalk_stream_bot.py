@@ -54,4 +54,6 @@ async def test_card_callback_handler_routes_action(monkeypatch) -> None:
         "action": "complete",
         "tdlId": str(tdl_id),
         "status": "done",
+        "nextAction": None,
+        "requiredFields": None,
     }
