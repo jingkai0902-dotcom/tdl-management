@@ -195,3 +195,16 @@ class ReminderCandidateRead(BaseModel):
     title: str
     action: str
     overdue_days: int
+
+
+class ReminderDispatchRead(BaseModel):
+    owner_id: str
+    action: str
+    overdue_days: int
+    card: TDLCardRead
+
+
+class ReminderRunRead(BaseModel):
+    candidate_count: int
+    marked_attention_count: int
+    dispatches: list[ReminderDispatchRead]

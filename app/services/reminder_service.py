@@ -4,9 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
-from app.integrations.dingtalk_card import TDLCard, build_reminder_card
+from app.integrations.dingtalk_card import build_reminder_card
 from app.models import AuditLog, TDL
-from app.schemas import ReminderCandidateRead
+from app.schemas import (
+    ReminderCandidateRead,
+    ReminderDispatchRead,
+    ReminderRunRead,
+    TDLCardRead,
+)
 
 
 OPEN_STATUSES = {"active", "attention", "snoozed"}
@@ -82,23 +87,47 @@ async def mark_attention_tdls(
 def build_sendable_reminder_cards(
     tdls: list[TDL],
     candidates: list[ReminderCandidateRead],
-) -> list[TDLCard]:
+) -> list[ReminderDispatchRead]:
     tdl_by_id = {tdl.tdl_id: tdl for tdl in tdls}
-    cards = []
+    dispatches = []
     for candidate in candidates:
         if candidate.action == "mark_attention":
             continue
         tdl = tdl_by_id.get(candidate.tdl_id)
         if tdl is None:
             continue
-        cards.append(
-            build_reminder_card(
-                tdl,
+        dispatches.append(
+            ReminderDispatchRead(
+                owner_id=candidate.owner_id,
                 action=candidate.action,
                 overdue_days=candidate.overdue_days,
+                card=TDLCardRead.model_validate(
+                    build_reminder_card(
+                        tdl,
+                        action=candidate.action,
+                        overdue_days=candidate.overdue_days,
+                    )
+                ),
             )
         )
-    return cards
+    return dispatches
+
+
+async def run_reminder_cycle(
+    session: AsyncSession,
+    *,
+    as_of: datetime,
+) -> ReminderRunRead:
+    result = await session.execute(select(TDL))
+    tdls = list(result.scalars().all())
+    candidates = build_reminder_candidates(tdls, as_of=as_of)
+    marked_attention = await mark_attention_tdls(session, candidates)
+    dispatches = build_sendable_reminder_cards(tdls, candidates)
+    return ReminderRunRead(
+        candidate_count=len(candidates),
+        marked_attention_count=len(marked_attention),
+        dispatches=dispatches,
+    )
 
 
 def _is_remindable(tdl: TDL, as_of: datetime) -> bool:
