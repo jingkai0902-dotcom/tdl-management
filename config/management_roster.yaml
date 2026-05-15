@@ -5,22 +5,22 @@ management:
   - name: 李珍
     english_name: Helen
     dingtalk_user_id: "0611436746849471"
-    role: 投资人
-    scope: [全盘管理]
+    role: 创始人/CEO
+    scope: [两品牌所有运营事务最终拍板]
     reports_to: null
 
   - name: 张蕾
     english_name: Teresa
     dingtalk_user_id: "0612430128789086"
-    role: 投资人
-    scope: [励步教学管理, 新人管理]
-    reports_to: null
+    role: 励步教学重建负责人
+    scope: [励步教学团队换血, 新师培养, 管教务长/教务经理/班主任, 牵头周度教学会议]
+    reports_to: 李珍
 
   - name: 荆少巍
     english_name: Frank
     dingtalk_user_id: "0617564550-1513038363"
-    role: 投资人
-    scope: [全公司IT, AI技术总控, 斯坦教学质量, 薪资统计与发放]
+    role: 斯坦教学负责人 + AI/薪资
+    scope: [斯坦教学磨课课制, 全公司薪资核算, AI体系搭建]
     reports_to: null
 
   - name: 张皓
