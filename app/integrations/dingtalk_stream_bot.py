@@ -60,6 +60,8 @@ class TDLCardCallbackHandler(CallbackHandler):
             "action": result.action,
             "tdlId": result.tdl_id,
             "status": result.status,
+            "nextAction": result.next_action,
+            "requiredFields": result.required_fields,
         }
 
 

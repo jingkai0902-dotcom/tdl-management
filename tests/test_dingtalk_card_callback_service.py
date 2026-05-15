@@ -47,3 +47,21 @@ async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() ->
     assert result.handled is False
     assert result.action == "postpone"
     assert result.tdl_id == str(tdl_id)
+    assert result.next_action == "collect_due_at"
+    assert result.required_fields == ["due_at"]
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_returns_owner_follow_up() -> None:
+    tdl_id = uuid4()
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_owner", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is False
+    assert result.action == "set_owner"
+    assert result.next_action == "collect_owner_id"
+    assert result.required_fields == ["owner_id"]
