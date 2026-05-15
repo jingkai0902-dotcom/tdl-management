@@ -100,6 +100,42 @@ class DingTalkClient:
             raise DingTalkAPIError(f"Failed to send DingTalk interactive card: {payload}")
         return resolved_out_track_id
 
+    async def create_tdl_calendar_event(
+        self,
+        *,
+        owner_id: str,
+        title: str,
+        due_at: datetime,
+        participant_user_ids: list[str] | None = None,
+        description: str | None = None,
+        duration_minutes: int = 30,
+    ) -> str:
+        token = await self._get_access_token()
+        end_time = int(due_at.timestamp() * 1000)
+        start_time = int((due_at - timedelta(minutes=duration_minutes)).timestamp() * 1000)
+        response = await self.http_client.post(
+            "/topapi/calendar/v2/event/create",
+            params={"access_token": token},
+            json={
+                "calendar_id": "primary",
+                "summary": title,
+                "description": description or "",
+                "start_time": start_time,
+                "end_time": end_time,
+                "organizer": {"userid": owner_id},
+                "attendees": [
+                    {"userid": user_id}
+                    for user_id in (participant_user_ids or [])
+                    if user_id != owner_id
+                ],
+            },
+        )
+        payload = response.json()
+        event_id = payload.get("result", {}).get("event_id")
+        if payload.get("errcode") != 0 or not event_id:
+            raise DingTalkAPIError(f"Failed to create DingTalk calendar event: {payload}")
+        return event_id
+
     async def _get_access_token(self) -> str:
         if (
             self._access_token is not None
