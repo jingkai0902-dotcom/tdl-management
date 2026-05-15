@@ -18,6 +18,7 @@ from app.services.tdl_service import (
     confirm_ready_drafts,
     confirm_tdl,
     postpone_tdl,
+    request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
 )
@@ -96,6 +97,21 @@ async def snooze_action(
             snooze_until=payload.snooze_until,
             actor_id=payload.actor_id,
         )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "lifecycle actions" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/actions/need-help")
+async def need_help_action(
+    payload: DingTalkAction,
+    session: AsyncSession = Depends(get_session),
+):
+    if payload.action != "need_help":
+        raise HTTPException(status_code=400, detail="Unsupported action")
+    try:
+        return await request_help_tdl(session, payload.tdl_id, payload.actor_id)
     except ValueError as exc:
         detail = str(exc)
         status_code = 409 if "lifecycle actions" in detail else 404

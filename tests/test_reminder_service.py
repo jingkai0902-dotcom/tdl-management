@@ -4,7 +4,11 @@ from uuid import uuid4
 import pytest
 
 from app.models import TDL
-from app.services.reminder_service import build_reminder_candidates, mark_attention_tdls
+from app.services.reminder_service import (
+    build_reminder_candidates,
+    build_sendable_reminder_cards,
+    mark_attention_tdls,
+)
 
 
 class FakeSession:
@@ -113,3 +117,21 @@ async def test_mark_attention_tdls_updates_status_and_writes_audit() -> None:
     assert [item.tdl_id for item in marked] == [tdl.tdl_id]
     assert tdl.status == "attention"
     assert session.items[-1].action == "mark_attention"
+
+
+def test_build_sendable_reminder_cards_skips_mark_attention_candidates() -> None:
+    due_today = _tdl(due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC))
+    day_two = _tdl(due_at=datetime(2026, 5, 16, 18, 0, tzinfo=UTC))
+    day_three = _tdl(due_at=datetime(2026, 5, 15, 18, 0, tzinfo=UTC))
+    candidates = build_reminder_candidates(
+        [due_today, day_two, day_three],
+        as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+        policy={
+            "overdue_day_2": "ask_owner",
+            "overdue_day_3": "mark_attention",
+        },
+    )
+
+    cards = build_sendable_reminder_cards([due_today, day_two, day_three], candidates)
+
+    assert [card.title for card in cards] == ["今日待办", "需要支持"]

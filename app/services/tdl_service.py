@@ -215,6 +215,23 @@ async def snooze_tdl(
     return tdl
 
 
+async def request_help_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
+    tdl = await _get_actionable_tdl(session, tdl_id)
+    tdl.status = "attention"
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="need_help",
+            actor_id=actor_id,
+            payload={},
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    return tdl
+
+
 async def _get_actionable_tdl(session: AsyncSession, tdl_id) -> TDL:
     tdl = await session.get(TDL, tdl_id)
     if tdl is None:

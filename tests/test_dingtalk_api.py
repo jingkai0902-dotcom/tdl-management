@@ -9,6 +9,7 @@ from app.api.dingtalk_webhook import (
     batch_confirm_drafts_action,
     complete_action,
     confirm_action,
+    need_help_action,
     postpone_action,
     snooze_action,
     update_draft_action,
@@ -204,3 +205,26 @@ async def test_snooze_action_sets_resume_time(monkeypatch) -> None:
     )
 
     assert result.status == "snoozed"
+
+
+@pytest.mark.asyncio
+async def test_need_help_action_marks_attention(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_request_help_tdl(session, incoming_tdl_id, actor_id):
+        assert incoming_tdl_id == tdl_id
+        assert actor_id == "0617564550-1513038363"
+        return SimpleNamespace(tdl_id=tdl_id, status="attention")
+
+    monkeypatch.setattr("app.api.dingtalk_webhook.request_help_tdl", fake_request_help_tdl)
+
+    result = await need_help_action(
+        DingTalkAction(
+            action="need_help",
+            tdl_id=tdl_id,
+            actor_id="0617564550-1513038363",
+        ),
+        session=None,
+    )
+
+    assert result.status == "attention"

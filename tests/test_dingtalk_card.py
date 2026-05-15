@@ -1,7 +1,12 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.integrations.dingtalk_card import build_created_card, build_draft_card, render_markdown
+from app.integrations.dingtalk_card import (
+    build_created_card,
+    build_draft_card,
+    build_reminder_card,
+    render_markdown,
+)
 
 
 _DEFAULT_DUE_AT = object()
@@ -74,3 +79,19 @@ def test_draft_card_marks_missing_completion_criteria() -> None:
         "set_completion_criteria",
         "cancel",
     ]
+
+
+def test_due_today_card_uses_daily_reminder_actions() -> None:
+    card = build_reminder_card(StubTDL("active"), action="due_today", overdue_days=0)
+
+    assert card.title == "今日待办"
+    assert "这条任务今天到期" in card.body
+    assert [button.action for button in card.buttons] == ["complete", "snooze"]
+
+
+def test_day_two_reminder_card_asks_for_support() -> None:
+    card = build_reminder_card(StubTDL("active"), action="ask_owner", overdue_days=2)
+
+    assert card.title == "需要支持"
+    assert "审核课程方案 已逾期 2 天" in card.body
+    assert [button.action for button in card.buttons] == ["complete", "postpone", "need_help"]
