@@ -38,3 +38,12 @@ def test_draft_card_marks_missing_due_at() -> None:
     card = build_draft_card(StubTDL("draft", due_at=None))
 
     assert "截止：[待补充]" in card.body
+
+
+def test_draft_card_marks_missing_owner() -> None:
+    tdl = StubTDL("draft")
+    tdl.owner_id = None
+
+    card = build_draft_card(tdl)
+
+    assert "负责人：[待补充]" in card.body

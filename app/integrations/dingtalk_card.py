@@ -31,7 +31,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
         title="TDL 草稿",
         body=[
             tdl.title,
-            f"负责人：{tdl.owner_id}",
+            f"负责人：{tdl.owner_id or '[待补充]'}",
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
         ],

@@ -1,4 +1,7 @@
 from uuid import uuid4
+from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -49,6 +52,34 @@ class FailingAIClient:
         raise RuntimeError("provider unavailable")
 
 
+class RealisticLibuAIClient:
+    async def extract_meeting_decisions(self, source_text: str):
+        assert "市场全链路 SOP" in source_text
+        return [
+            DecisionDraft(
+                title="梳理前后端数据需求并形成统一入口",
+                owner_id="0617564550-1513038363",
+                completion_criteria="完成表格逻辑并支持从钉钉入口上传",
+                tdl_title="梳理前后端数据需求并完成表格逻辑",
+                due_at=None,
+            ),
+            DecisionDraft(
+                title="排定新师培训课表",
+                owner_id=None,
+                completion_criteria="形成可执行课表",
+                tdl_title="排定新师培训课表",
+                due_at=None,
+            ),
+            DecisionDraft(
+                title="完成市场全链路 SOP",
+                owner_id="0962151633-1819579479",
+                completion_criteria="形成跨部门 SOP 并纳入教学交付标准",
+                tdl_title="完成市场全链路 SOP",
+                due_at=datetime(2026, 5, 31, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            ),
+        ]
+
+
 @pytest.mark.asyncio
 async def test_parse_meeting_minutes_creates_linked_draft_objects() -> None:
     session = FakeSession()
@@ -81,3 +112,33 @@ async def test_parse_meeting_minutes_rolls_back_when_extraction_fails() -> None:
         await parse_meeting_minutes(session, payload, FailingAIClient())
 
     assert session.rollback_called is True
+
+
+@pytest.mark.asyncio
+async def test_parse_realistic_libu_excerpt_creates_multiple_linked_drafts() -> None:
+    source_text = Path("tests/fixtures/libu_may_meeting_excerpt.txt").read_text()
+    session = FakeSession()
+    payload = MeetingMinutesIngest(
+        title="励步 5 月月会",
+        source_text=source_text,
+        created_by="0617564550-1513038363",
+    )
+
+    meeting, decisions, tdls = await parse_meeting_minutes(
+        session,
+        payload,
+        RealisticLibuAIClient(),
+    )
+
+    assert meeting.title == "励步 5 月月会"
+    assert len(decisions) == 3
+    assert len(tdls) == 3
+    assert all(tdl.meeting_id == meeting.meeting_id for tdl in tdls)
+    assert all(tdl.status == "draft" for tdl in tdls)
+    assert {tdl.owner_id for tdl in tdls} == {
+        None,
+        "0617564550-1513038363",
+        "0962151633-1819579479",
+    }
+    assert [tdl.due_at for tdl in tdls].count(None) == 2
+    assert tdls[2].due_at is not None

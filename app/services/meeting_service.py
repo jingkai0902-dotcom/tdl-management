@@ -63,12 +63,11 @@ async def parse_meeting_minutes(
         await session.flush()
         decisions.append(decision)
 
-        owner_id = draft.owner_id or payload.created_by
         tdl = TDL(
             meeting_id=meeting.meeting_id,
             decision_id=decision.decision_id,
             title=draft.tdl_title,
-            owner_id=owner_id,
+            owner_id=draft.owner_id,
             due_at=draft.due_at,
             created_by=payload.created_by,
             source="meeting_minutes",
