@@ -34,6 +34,6 @@ async def parse_meeting_minutes_endpoint(
         decision_count=len(decisions),
         tdl_count=len(tdls),
         decisions=[DecisionRead.model_validate(decision) for decision in decisions],
-        tdls=[TDLRead.model_validate(tdl) for tdl in tdls],
+        tdls=[TDLRead.from_tdl(tdl) for tdl in tdls],
         draft_cards=[TDLCardRead.model_validate(build_draft_card(tdl)) for tdl in tdls],
     )

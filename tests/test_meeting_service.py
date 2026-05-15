@@ -33,6 +33,12 @@ class FakeSession:
     async def rollback(self) -> None:
         self.rollback_called = True
 
+    async def get(self, model, identifier):
+        for item in self.items:
+            if getattr(item, "tdl_id", None) == identifier:
+                return item
+        return None
+
 
 class FakeAIClient:
     async def extract_meeting_decisions(self, source_text: str):
