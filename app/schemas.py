@@ -31,6 +31,7 @@ class TDLRead(BaseModel):
     source: str
     completion_criteria: str | None = None
     missing_fields: list[str] = Field(default_factory=list)
+    recommended_fields: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
@@ -50,6 +51,11 @@ class TDLRead(BaseModel):
                 "missing_fields": [
                     field_name
                     for field_name in ("owner_id", "due_at")
+                    if getattr(tdl, field_name) is None
+                ],
+                "recommended_fields": [
+                    field_name
+                    for field_name in ("completion_criteria",)
                     if getattr(tdl, field_name) is None
                 ],
                 "next_actions": cls._next_actions_for_tdl(tdl),

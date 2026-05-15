@@ -51,7 +51,9 @@ def test_tdl_read_next_actions_follow_missing_fields() -> None:
     )
 
     assert incomplete.next_actions == ["set_owner", "set_due_at"]
+    assert incomplete.recommended_fields == ["completion_criteria"]
     assert complete.next_actions == ["confirm"]
+    assert complete.recommended_fields == ["completion_criteria"]
 
 
 @pytest.mark.asyncio
