@@ -4,7 +4,8 @@ from app.config import load_yaml_config
 from app.integrations.ai_client import AIClient, TDLExtractionError, TDLFieldDraft, get_ai_client
 from app.integrations.dingtalk_card import TDLCard, build_created_card, build_draft_card
 from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate
-from app.services.tdl_service import create_draft_tdl, create_tdl
+from app.services.calendar_service import create_tdl_with_calendar
+from app.services.tdl_service import create_draft_tdl
 
 
 def _auto_create_rules() -> dict:
@@ -56,7 +57,7 @@ async def intake_dingtalk_message(
             priority=payload.priority,
             source=payload.source,
         )
-        tdl = await create_tdl(session, create_payload)
+        tdl = await create_tdl_with_calendar(session, create_payload)
         return build_created_card(tdl)
 
     tdl = await create_draft_tdl(session, payload)

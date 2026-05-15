@@ -27,10 +27,13 @@ from app.schemas import (
 
 @pytest.mark.asyncio
 async def test_confirm_action_returns_conflict_for_incomplete_draft(monkeypatch) -> None:
-    async def fake_confirm_tdl(session, tdl_id, actor_id):
+    async def fake_confirm_tdl_with_calendar(session, tdl_id, actor_id):
         raise ValueError("TDL draft missing required fields: owner_id, due_at")
 
-    monkeypatch.setattr("app.api.dingtalk_webhook.confirm_tdl", fake_confirm_tdl)
+    monkeypatch.setattr(
+        "app.api.dingtalk_webhook.confirm_tdl_with_calendar",
+        fake_confirm_tdl_with_calendar,
+    )
 
     with pytest.raises(HTTPException) as exc:
         await confirm_action(
@@ -85,7 +88,7 @@ async def test_batch_confirm_drafts_action_returns_confirmed_and_skipped(monkeyp
     confirmed_id = uuid4()
     skipped_id = uuid4()
 
-    async def fake_confirm_ready_drafts(session, tdl_ids, actor_id):
+    async def fake_confirm_ready_drafts_with_calendar(session, tdl_ids, actor_id):
         assert tdl_ids == [confirmed_id, skipped_id]
         assert actor_id == "user-1"
         return BatchConfirmDraftsRead(
@@ -118,8 +121,8 @@ async def test_batch_confirm_drafts_action_returns_confirmed_and_skipped(monkeyp
         )
 
     monkeypatch.setattr(
-        "app.api.dingtalk_webhook.confirm_ready_drafts",
-        fake_confirm_ready_drafts,
+        "app.api.dingtalk_webhook.confirm_ready_drafts_with_calendar",
+        fake_confirm_ready_drafts_with_calendar,
     )
 
     result = await batch_confirm_drafts_action(
