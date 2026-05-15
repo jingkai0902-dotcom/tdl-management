@@ -145,6 +145,7 @@ def render_markdown(card: TDLCard) -> str:
 
 
 def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
+    """Render data for templates exposing msgTitle/staticMsgContent/sys_full_json_obj."""
     return {
         "msgTitle": card.title,
         "staticMsgContent": "\n".join(card.body),

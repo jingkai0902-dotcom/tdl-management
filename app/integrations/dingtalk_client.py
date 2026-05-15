@@ -8,6 +8,10 @@ import httpx
 from app.config import get_settings
 
 
+OAPI_BASE_URL = "https://oapi.dingtalk.com"
+OPENAPI_BASE_URL = "https://api.dingtalk.com"
+
+
 class DingTalkAPIError(RuntimeError):
     pass
 
@@ -26,7 +30,7 @@ class DingTalkClient:
         self.app_secret = app_secret if app_secret is not None else settings.dingtalk_app_secret
         self.agent_id = agent_id if agent_id is not None else settings.dingtalk_agent_id
         self.http_client = http_client or httpx.AsyncClient(
-            base_url="https://oapi.dingtalk.com",
+            base_url=OAPI_BASE_URL,
             timeout=10.0,
         )
         self._owns_http_client = http_client is None
@@ -79,7 +83,7 @@ class DingTalkClient:
         token = await self._get_openapi_access_token()
         resolved_out_track_id = out_track_id or str(uuid4())
         response = await self.http_client.post(
-            "https://api.dingtalk.com/v1.0/card/instances/createAndDeliver",
+            f"{OPENAPI_BASE_URL}/v1.0/card/instances/createAndDeliver",
             headers={"x-acs-dingtalk-access-token": token},
             json={
                 "cardTemplateId": card_template_id,
@@ -129,7 +133,7 @@ class DingTalkClient:
         if not self.app_key or not self.app_secret:
             raise DingTalkAPIError("Missing DingTalk app credentials")
         response = await self.http_client.post(
-            "https://api.dingtalk.com/v1.0/oauth2/accessToken",
+            f"{OPENAPI_BASE_URL}/v1.0/oauth2/accessToken",
             json={"appKey": self.app_key, "appSecret": self.app_secret},
         )
         payload = response.json()
