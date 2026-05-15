@@ -12,7 +12,7 @@ class Decision(Base):
 
     decision_id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     meeting_id: Mapped[UUID] = mapped_column(ForeignKey("meetings.meeting_id"), nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     owner_id: Mapped[str | None] = mapped_column(String(128))
     completion_criteria: Mapped[str | None] = mapped_column(Text)

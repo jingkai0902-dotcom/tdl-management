@@ -16,7 +16,7 @@ class TDL(Base):
     decision_id: Mapped[UUID | None] = mapped_column(ForeignKey("decisions.decision_id"))
     parent_id: Mapped[UUID | None] = mapped_column(ForeignKey("tdls.tdl_id"))
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
     owner_id: Mapped[str] = mapped_column(String(128), nullable=False)
     participants: Mapped[list[str]] = mapped_column(JSONB, default=list)
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

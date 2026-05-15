@@ -12,7 +12,7 @@ class Meeting(Base):
     __tablename__ = "meetings"
 
     meeting_id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
     meeting_type: Mapped[str] = mapped_column(String(64), default="monthly_review")
     held_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     source_text: Mapped[str | None] = mapped_column(Text)
