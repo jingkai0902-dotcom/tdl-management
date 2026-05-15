@@ -5,6 +5,7 @@ import pytest
 
 from app.integrations.dingtalk_card import build_card_action_id
 from app.services.dingtalk_card_callback_service import (
+    FOLLOW_UP_SUBMITTERS,
     ONE_CLICK_ACTIONS,
     handle_tdl_card_callback,
 )
@@ -65,3 +66,74 @@ async def test_handle_tdl_card_callback_returns_owner_follow_up() -> None:
     assert result.action == "set_owner"
     assert result.next_action == "collect_owner_id"
     assert result.required_fields == ["owner_id"]
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_submits_set_due_at(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        assert session == "session"
+        assert actor_id == "user-1"
+        assert submission.due_at.isoformat() == "2026-05-31T18:00:00+08:00"
+        return SimpleNamespace(tdl_id=tdl_id, status="draft")
+
+    monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "set_due_at", fake_submitter)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_due_at", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"due_at": "2026-05-31T18:00:00+08:00"},
+    )
+
+    assert result.handled is True
+    assert result.action == "set_due_at"
+    assert result.tdl_id == str(tdl_id)
+    assert result.status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_submits_postpone(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        assert session == "session"
+        assert actor_id == "user-1"
+        assert submission.due_at.isoformat() == "2026-06-02T18:00:00+08:00"
+        return SimpleNamespace(tdl_id=tdl_id, status="active")
+
+    monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "postpone", fake_submitter)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("postpone", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"due_at": "2026-06-02T18:00:00+08:00"},
+    )
+
+    assert result.handled is True
+    assert result.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_submits_snooze(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        assert session == "session"
+        assert actor_id == "user-1"
+        assert submission.snooze_until.isoformat() == "2026-05-20T09:00:00+08:00"
+        return SimpleNamespace(tdl_id=tdl_id, status="snoozed")
+
+    monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "snooze", fake_submitter)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("snooze", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"snooze_until": "2026-05-20T09:00:00+08:00"},
+    )
+
+    assert result.handled is True
+    assert result.status == "snoozed"

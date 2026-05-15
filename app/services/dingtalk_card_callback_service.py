@@ -1,9 +1,18 @@
 from dataclasses import dataclass
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.dingtalk_card import parse_card_action_id
-from app.services.tdl_service import complete_tdl, confirm_tdl, request_help_tdl
+from app.schemas import TDLCardCallbackSubmission, TDLDraftUpdate
+from app.services.tdl_service import (
+    complete_tdl,
+    confirm_tdl,
+    postpone_tdl,
+    request_help_tdl,
+    snooze_tdl,
+    update_draft_tdl,
+)
 
 
 @dataclass(frozen=True)
@@ -34,11 +43,70 @@ FOLLOW_UP_ACTIONS = {
 }
 
 
+async def _submit_set_due_at(
+    session: AsyncSession,
+    *,
+    tdl_id,
+    actor_id: str,
+    submission: TDLCardCallbackSubmission,
+):
+    if submission.due_at is None:
+        return None
+    return await update_draft_tdl(
+        session,
+        tdl_id,
+        TDLDraftUpdate(due_at=submission.due_at),
+        actor_id,
+    )
+
+
+async def _submit_postpone(
+    session: AsyncSession,
+    *,
+    tdl_id,
+    actor_id: str,
+    submission: TDLCardCallbackSubmission,
+):
+    if submission.due_at is None:
+        return None
+    return await postpone_tdl(
+        session,
+        tdl_id,
+        due_at=submission.due_at,
+        actor_id=actor_id,
+    )
+
+
+async def _submit_snooze(
+    session: AsyncSession,
+    *,
+    tdl_id,
+    actor_id: str,
+    submission: TDLCardCallbackSubmission,
+):
+    if submission.snooze_until is None:
+        return None
+    return await snooze_tdl(
+        session,
+        tdl_id,
+        snooze_until=submission.snooze_until,
+        actor_id=actor_id,
+    )
+
+
+FOLLOW_UP_SUBMITTERS = {
+    "set_due_at": _submit_set_due_at,
+    "postpone": _submit_postpone,
+    "snooze": _submit_snooze,
+}
+
+
 async def handle_tdl_card_callback(
     session: AsyncSession,
     *,
     action_id: str,
     actor_id: str,
+    submitted_fields: dict | None = None,
 ) -> CardCallbackResult:
     parsed = parse_card_action_id(action_id)
     if parsed is None:
@@ -49,6 +117,25 @@ async def handle_tdl_card_callback(
         follow_up = FOLLOW_UP_ACTIONS.get(action)
         if follow_up is None:
             return CardCallbackResult(handled=False, action=action, tdl_id=str(tdl_id))
+        try:
+            submission = TDLCardCallbackSubmission.model_validate(submitted_fields or {})
+        except ValidationError:
+            submission = TDLCardCallbackSubmission()
+        submitter = FOLLOW_UP_SUBMITTERS.get(action)
+        if submitter is not None:
+            tdl = await submitter(
+                session,
+                tdl_id=tdl_id,
+                actor_id=actor_id,
+                submission=submission,
+            )
+            if tdl is not None:
+                return CardCallbackResult(
+                    handled=True,
+                    action=action,
+                    tdl_id=str(tdl.tdl_id),
+                    status=tdl.status,
+                )
         next_action, required_fields = follow_up
         return CardCallbackResult(
             handled=False,
