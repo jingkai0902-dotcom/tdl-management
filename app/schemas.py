@@ -154,3 +154,24 @@ class MeetingParseRead(BaseModel):
     ready_to_confirm_tdls: list[TDLRead]
     incomplete_tdls: list[TDLRead]
     draft_cards: list[TDLCardRead]
+
+
+class WeeklyReportStaleTDLRead(BaseModel):
+    tdl_id: UUID
+    title: str
+    days_without_progress: int
+
+
+class WeeklyReportRead(BaseModel):
+    period_start: datetime
+    period_end: datetime
+    created_count: int
+    completed_count: int
+    overdue_open_count: int
+    postponed_count: int
+    waiting_count: int
+    waiting_by_user: dict[str, int]
+    blocked_count: int
+    stale_tdls: list[WeeklyReportStaleTDLRead]
+    due_next_week_count: int
+    created_by_business_line: dict[str, int]
