@@ -49,7 +49,7 @@ def upgrade() -> None:
         sa.Column("decision_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("decisions.decision_id")),
         sa.Column("parent_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tdls.tdl_id")),
         sa.Column("title", sa.String(length=500), nullable=False),
-        sa.Column("owner_id", sa.String(length=128), nullable=False),
+        sa.Column("owner_id", sa.String(length=128)),
         sa.Column("participants", postgresql.JSONB(), nullable=False),
         sa.Column("due_at", sa.DateTime(timezone=True)),
         sa.Column("start_at", sa.DateTime(timezone=True)),

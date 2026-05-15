@@ -15,6 +15,7 @@ class TDLCreate(BaseModel):
 
 
 class TDLDraftCreate(TDLCreate):
+    owner_id: str | None = Field(default=None, min_length=1, max_length=128)
     due_at: datetime | None = None
     raw_text: str | None = None
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -23,7 +24,7 @@ class TDLDraftCreate(TDLCreate):
 class TDLRead(BaseModel):
     tdl_id: UUID
     title: str
-    owner_id: str
+    owner_id: str | None
     due_at: datetime | None
     status: str
     priority: str
@@ -45,7 +46,42 @@ class DingTalkAction(BaseModel):
     actor_id: str
 
 
+class CardButtonRead(BaseModel):
+    label: str
+    action: str
+    tdl_id: UUID
+
+    model_config = {"from_attributes": True}
+
+
+class TDLCardRead(BaseModel):
+    title: str
+    body: list[str]
+    buttons: list[CardButtonRead]
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
 class MeetingMinutesIngest(BaseModel):
     title: str
     source_text: str
     created_by: str
+
+
+class DecisionRead(BaseModel):
+    decision_id: UUID
+    title: str
+    owner_id: str | None
+    completion_criteria: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class MeetingParseRead(BaseModel):
+    meeting_id: UUID
+    decision_count: int
+    tdl_count: int
+    decisions: list[DecisionRead]
+    tdls: list[TDLRead]
+    draft_cards: list[TDLCardRead]
