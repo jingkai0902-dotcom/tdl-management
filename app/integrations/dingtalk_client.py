@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import httpx
 
@@ -31,6 +32,8 @@ class DingTalkClient:
         self._owns_http_client = http_client is None
         self._access_token: str | None = None
         self._access_token_expires_at: datetime | None = None
+        self._openapi_access_token: str | None = None
+        self._openapi_access_token_expires_at: datetime | None = None
 
     async def close(self) -> None:
         if self._owns_http_client:
@@ -65,6 +68,34 @@ class DingTalkClient:
         if payload.get("errcode") != 0:
             raise DingTalkAPIError(f"Failed to send DingTalk work message: {payload}")
 
+    async def send_interactive_card_to_user(
+        self,
+        *,
+        user_id: str,
+        card_template_id: str,
+        card_data: dict[str, str],
+        out_track_id: str | None = None,
+    ) -> str:
+        token = await self._get_openapi_access_token()
+        resolved_out_track_id = out_track_id or str(uuid4())
+        response = await self.http_client.post(
+            "https://api.dingtalk.com/v1.0/card/instances/createAndDeliver",
+            headers={"x-acs-dingtalk-access-token": token},
+            json={
+                "cardTemplateId": card_template_id,
+                "outTrackId": resolved_out_track_id,
+                "cardData": {"cardParamMap": card_data},
+                "callbackType": "STREAM",
+                "openSpaceId": f"dtv1.card//IM_ROBOT.{user_id}",
+                "imRobotOpenSpaceModel": {"supportForward": False},
+                "imRobotOpenDeliverModel": {"spaceType": "IM_ROBOT"},
+            },
+        )
+        payload = response.json()
+        if response.status_code >= 400 or payload.get("code"):
+            raise DingTalkAPIError(f"Failed to send DingTalk interactive card: {payload}")
+        return resolved_out_track_id
+
     async def _get_access_token(self) -> str:
         if (
             self._access_token is not None
@@ -87,3 +118,26 @@ class DingTalkClient:
             seconds=max(expires_in - 300, 0)
         )
         return self._access_token
+
+    async def _get_openapi_access_token(self) -> str:
+        if (
+            self._openapi_access_token is not None
+            and self._openapi_access_token_expires_at is not None
+            and datetime.now(UTC) < self._openapi_access_token_expires_at
+        ):
+            return self._openapi_access_token
+        if not self.app_key or not self.app_secret:
+            raise DingTalkAPIError("Missing DingTalk app credentials")
+        response = await self.http_client.post(
+            "https://api.dingtalk.com/v1.0/oauth2/accessToken",
+            json={"appKey": self.app_key, "appSecret": self.app_secret},
+        )
+        payload = response.json()
+        if response.status_code >= 400 or not payload.get("accessToken"):
+            raise DingTalkAPIError(f"Failed to get DingTalk OpenAPI access token: {payload}")
+        self._openapi_access_token = payload["accessToken"]
+        expires_in = int(payload.get("expireIn", 7200))
+        self._openapi_access_token_expires_at = datetime.now(UTC) + timedelta(
+            seconds=max(expires_in - 300, 0)
+        )
+        return self._openapi_access_token

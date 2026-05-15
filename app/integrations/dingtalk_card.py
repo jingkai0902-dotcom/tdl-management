@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import json
 from uuid import UUID
 
 from app.models import TDL
@@ -141,3 +142,29 @@ def render_markdown(card: TDLCard) -> str:
         lines.extend(["", "操作："])
         lines.extend(f"- {button.label}" for button in card.buttons)
     return "\n".join(lines)
+
+
+def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
+    return {
+        "msgTitle": card.title,
+        "staticMsgContent": "\n".join(card.body),
+        "sys_full_json_obj": json.dumps(
+            {
+                "order": ["msgTitle", "staticMsgContent", "msgButtons"],
+                "msgButtons": [
+                    {
+                        "text": button.label,
+                        "color": "blue" if index == 0 else "gray",
+                        "id": build_card_action_id(button.action, button.tdl_id),
+                        "request": True,
+                    }
+                    for index, button in enumerate(card.buttons)
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    }
+
+
+def build_card_action_id(action: str, tdl_id: UUID) -> str:
+    return f"tdl::{action}::{tdl_id}"

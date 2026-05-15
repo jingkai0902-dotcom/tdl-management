@@ -4,8 +4,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import load_yaml_config
-from app.integrations.dingtalk_card import build_reminder_card, render_markdown
+from app.config import get_settings, load_yaml_config
+from app.integrations.dingtalk_card import (
+    build_reminder_card,
+    render_interactive_card_data,
+    render_markdown,
+)
 from app.integrations.dingtalk_client import DingTalkClient
 from app.models import AuditLog, TDL
 from app.schemas import (
@@ -188,13 +192,27 @@ def filter_due_candidates_for_run(
 async def send_reminder_dispatches(
     client: DingTalkClient,
     dispatches: list[ReminderDispatchRead],
+    *,
+    interactive_card_template_id: str | None = None,
 ) -> int:
+    template_id = (
+        interactive_card_template_id
+        if interactive_card_template_id is not None
+        else get_settings().dingtalk_tdl_card_template_id
+    )
     for dispatch in dispatches:
-        await client.send_work_markdown(
-            user_ids=[dispatch.owner_id],
-            title=dispatch.card.title,
-            text=render_markdown(dispatch.card),
-        )
+        if template_id:
+            await client.send_interactive_card_to_user(
+                user_id=dispatch.owner_id,
+                card_template_id=template_id,
+                card_data=render_interactive_card_data(dispatch.card),
+            )
+        else:
+            await client.send_work_markdown(
+                user_ids=[dispatch.owner_id],
+                title=dispatch.card.title,
+                text=render_markdown(dispatch.card),
+            )
     return len(dispatches)
 
 
