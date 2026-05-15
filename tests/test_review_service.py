@@ -1,8 +1,16 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
+
 from app.models import AuditLog, TDL
-from app.services.review_service import build_weekly_report
+from app.schemas import WeeklyReportRead, WeeklyReportStaleTDLRead
+from app.services.review_service import (
+    build_weekly_report,
+    render_weekly_report_markdown,
+    send_weekly_report,
+    weekly_report_recipients,
+)
 
 
 def _tdl(
@@ -111,3 +119,72 @@ def test_build_weekly_report_counts_current_facts() -> None:
     assert [tdl.days_without_progress for tdl in report.stale_tdls] == [6, 5]
     assert report.due_next_week_count == 1
     assert report.created_by_business_line == {"励步英语": 1, "斯坦星球": 1}
+
+
+def test_render_weekly_report_markdown_keeps_fact_ledger_shape() -> None:
+    report = WeeklyReportRead(
+        period_start=datetime(2026, 5, 11, tzinfo=UTC),
+        period_end=datetime(2026, 5, 18, tzinfo=UTC),
+        created_count=2,
+        completed_count=1,
+        overdue_open_count=1,
+        postponed_count=1,
+        waiting_count=2,
+        waiting_by_user={"u-1": 2},
+        blocked_count=1,
+        stale_tdls=[
+            WeeklyReportStaleTDLRead(
+                tdl_id=uuid4(),
+                title="完成招生方案",
+                days_without_progress=4,
+            )
+        ],
+        due_next_week_count=1,
+        created_by_business_line={"励步英语": 2},
+    )
+
+    result = render_weekly_report_markdown(report)
+
+    assert "## 周报事实账本" in result
+    assert "- 新增：2" in result
+    assert "- u-1：2 条" in result
+    assert "- 完成招生方案：4 天未推进" in result
+    assert "- 励步英语：2 条" in result
+
+
+def test_weekly_report_recipients_reads_config() -> None:
+    assert weekly_report_recipients(
+        {"weekly_report": {"recipient_user_ids": ["user-1", "user-2"]}}
+    ) == ["user-1", "user-2"]
+
+
+@pytest.mark.asyncio
+async def test_send_weekly_report_sends_one_markdown_to_all_recipients() -> None:
+    report = WeeklyReportRead(
+        period_start=datetime(2026, 5, 11, tzinfo=UTC),
+        period_end=datetime(2026, 5, 18, tzinfo=UTC),
+        created_count=0,
+        completed_count=0,
+        overdue_open_count=0,
+        postponed_count=0,
+        waiting_count=0,
+        waiting_by_user={},
+        blocked_count=0,
+        stale_tdls=[],
+        due_next_week_count=0,
+        created_by_business_line={},
+    )
+
+    class FakeDingTalkClient:
+        async def send_work_markdown(self, *, user_ids, title, text):
+            assert user_ids == ["user-1", "user-2"]
+            assert title == "周报事实账本"
+            assert "## 周报事实账本" in text
+
+    count = await send_weekly_report(
+        FakeDingTalkClient(),
+        report,
+        recipient_user_ids=["user-1", "user-2"],
+    )
+
+    assert count == 2

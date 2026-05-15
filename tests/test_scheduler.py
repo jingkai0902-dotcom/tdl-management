@@ -6,7 +6,9 @@ from app.schemas import ReminderRunRead
 from app.workers.scheduler import (
     build_scheduler,
     run_scheduled_reminder_cycle,
+    run_scheduled_weekly_report,
     scheduled_reminder_times,
+    scheduled_weekly_report_time,
 )
 
 
@@ -51,7 +53,15 @@ def test_build_scheduler_registers_one_job_per_distinct_time() -> None:
         timezone_name="Asia/Shanghai",
     )
 
-    assert sorted(job.id for job in scheduler.get_jobs()) == ["reminders-0830", "reminders-1000"]
+    assert sorted(job.id for job in scheduler.get_jobs()) == [
+        "reminders-0830",
+        "reminders-1000",
+        "weekly-report",
+    ]
+
+
+def test_scheduled_weekly_report_time_reads_config() -> None:
+    assert scheduled_weekly_report_time({"weekly_report": {"time": "09:30"}}) == "09:30"
 
 
 @pytest.mark.asyncio
@@ -82,4 +92,40 @@ async def test_run_scheduled_reminder_cycle_sends_dispatches(monkeypatch) -> Non
     )
 
     assert result == expected
+    assert fake_client.closed is True
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_weekly_report_sends_report(monkeypatch) -> None:
+    fake_client = FakeDingTalkClient()
+    expected = object()
+
+    async def fake_generate_weekly_report(session, *, period_start, period_end, as_of):
+        assert session == "session"
+        assert period_start == datetime(2026, 5, 11, 0, 0, tzinfo=UTC)
+        assert period_end == datetime(2026, 5, 18, 0, 0, tzinfo=UTC)
+        assert as_of == datetime(2026, 5, 18, 9, 0, tzinfo=UTC)
+        return expected
+
+    async def fake_send_weekly_report(client, report):
+        assert client is fake_client
+        assert report is expected
+        return 1
+
+    monkeypatch.setattr(
+        "app.workers.scheduler.generate_weekly_report",
+        fake_generate_weekly_report,
+    )
+    monkeypatch.setattr(
+        "app.workers.scheduler.send_weekly_report",
+        fake_send_weekly_report,
+    )
+
+    result = await run_scheduled_weekly_report(
+        as_of=datetime(2026, 5, 18, 9, 0, tzinfo=UTC),
+        session_factory=FakeSessionContext,
+        client_factory=lambda: fake_client,
+    )
+
+    assert result is expected
     assert fake_client.closed is True
