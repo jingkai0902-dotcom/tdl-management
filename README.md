@@ -42,6 +42,8 @@ PYTHONPATH=. .venv/bin/pytest -q
 - `DINGTALK_APP_SECRET`
 - `DINGTALK_AGENT_ID`
 - `PUBLIC_BASE_URL`
+- `DINGTALK_OAUTH_CLIENT_ID`（钉钉 OAuth ClientID，不是老 OAPI AppKey）
+- `DINGTALK_OAUTH_CLIENT_SECRET`（钉钉 OAuth ClientSecret；未配置时回退 `DINGTALK_APP_SECRET`）
 - `DINGTALK_OAUTH_SCOPE`（默认 `openid Contact.User.Read Calendar.Event.Write`）
 - `DINGTALK_OAUTH_REDIRECT_URI`
 
