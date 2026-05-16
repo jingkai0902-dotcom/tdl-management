@@ -11,7 +11,7 @@ Environment=PYTHONPATH=/opt/bots/tdl/backend
 ExecStart=/opt/bots/tdl/backend/.venv/bin/python -m app.integrations.dingtalk_stream_bot
 Restart=always
 RestartSec=3
-User=root
+User=tdl
 
 [Install]
 WantedBy=multi-user.target

@@ -50,6 +50,7 @@ PYTHONPATH=. .venv/bin/pytest -q
 
 - 代码目录：`/opt/bots/tdl/backend`
 - 后端端口：`127.0.0.1:8010`
+- 运行用户：默认 `tdl`
 - systemd：
   - `tdl-backend.service`
   - `tdl-stream-bot.service`
@@ -63,6 +64,12 @@ cd /opt/bots/tdl/backend
 cp .env.example .env
 # 填好 .env
 bash deploy/deploy.sh
+```
+
+部署脚本默认创建并使用专用系统用户 `tdl`。如目标服务器已经有既定服务用户，可显式指定：
+
+```bash
+SERVICE_USER=<existing-user> bash deploy/deploy.sh
 ```
 
 如果需要通过 Nginx 暴露 API，可把 [deploy/nginx-tdl.conf](deploy/nginx-tdl.conf) 合并到目标站点配置中，再执行：
