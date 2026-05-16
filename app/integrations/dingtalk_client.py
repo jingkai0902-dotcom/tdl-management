@@ -107,7 +107,7 @@ class DingTalkClient:
     async def create_tdl_calendar_event(
         self,
         *,
-        owner_union_id: str,
+        owner_user_id: str,
         user_access_token: str,
         title: str,
         due_at: datetime,
@@ -115,7 +115,7 @@ class DingTalkClient:
         duration_minutes: int = 30,
     ) -> str:
         response = await self.http_client.post(
-            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_union_id}/calendars/primary/events",
+            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_user_id}/calendars/primary/events",
             headers={"x-acs-dingtalk-access-token": user_access_token},
             json=self._calendar_event_request_body(
                 title=title,
@@ -134,7 +134,7 @@ class DingTalkClient:
         self,
         *,
         event_id: str,
-        owner_union_id: str,
+        owner_user_id: str,
         user_access_token: str,
         title: str,
         due_at: datetime,
@@ -142,7 +142,7 @@ class DingTalkClient:
         duration_minutes: int = 30,
     ) -> str:
         response = await self.http_client.put(
-            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_union_id}/calendars/primary/events/{event_id}",
+            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_user_id}/calendars/primary/events/{event_id}",
             headers={"x-acs-dingtalk-access-token": user_access_token},
             json=self._calendar_event_request_body(
                 title=title,
@@ -182,12 +182,13 @@ class DingTalkClient:
     def build_user_authorization_url(self, *, redirect_uri: str, state: str) -> str:
         if not self.app_key:
             raise DingTalkAPIError("Missing DingTalk app_key")
+        settings = get_settings()
         query = urlencode(
             {
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "client_id": self.app_key,
-                "scope": "openid",
+                "scope": settings.dingtalk_oauth_scope or "openid",
                 "state": state,
                 "prompt": "consent",
             }
@@ -233,6 +234,20 @@ class DingTalkClient:
         if response.status_code >= 400 or payload.get("code") or not payload.get("unionId"):
             raise DingTalkAPIError(f"Failed to get DingTalk current user profile: {payload}")
         return payload
+
+    async def get_user_id_by_union_id(self, union_id: str) -> str:
+        token = await self._get_access_token()
+        response = await self.http_client.post(
+            "/topapi/user/getbyunionid",
+            params={"access_token": token},
+            json={"unionid": union_id},
+        )
+        payload = response.json()
+        result = payload.get("result") or {}
+        user_id = result.get("userid") or payload.get("userid")
+        if payload.get("errcode") != 0 or not user_id:
+            raise DingTalkAPIError(f"Failed to resolve DingTalk user id from union id: {payload}")
+        return str(user_id)
 
     async def _get_access_token(self) -> str:
         if (

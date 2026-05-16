@@ -68,7 +68,7 @@ async def create_calendar_event_for_tdl(
         )
         return tdl
     event_id = await dingtalk_client.create_tdl_calendar_event(
-        owner_union_id=authorization.union_id,
+        owner_user_id=authorization.dingtalk_user_id,
         user_access_token=authorization.access_token,
         title=tdl.title,
         due_at=tdl.due_at,
@@ -116,7 +116,7 @@ async def update_calendar_event_for_tdl(
         return tdl
     await dingtalk_client.update_tdl_calendar_event(
         event_id=tdl.calendar_event_id,
-        owner_union_id=authorization.union_id,
+        owner_user_id=authorization.dingtalk_user_id,
         user_access_token=authorization.access_token,
         title=tdl.title,
         due_at=tdl.due_at,

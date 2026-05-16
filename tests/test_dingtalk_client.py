@@ -135,7 +135,7 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
         )
 
         event_id = await client.create_tdl_calendar_event(
-            owner_union_id="union-1",
+            owner_user_id="user-1",
             user_access_token="user-token",
             title="完成招生方案",
             due_at=datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
@@ -144,7 +144,7 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/v1.0/calendar/users/union-1/calendars/primary/events",
+        "/v1.0/calendar/users/user-1/calendars/primary/events",
     ]
     assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
     assert requests[0].read().decode() == (
@@ -175,7 +175,7 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
         event_id = await client.update_tdl_calendar_event(
             event_id="evt-1",
-            owner_union_id="union-1",
+            owner_user_id="user-1",
             user_access_token="user-token",
             title="完成招生方案",
             due_at=datetime(2026, 5, 22, 18, 0, tzinfo=UTC),
@@ -184,7 +184,7 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/v1.0/calendar/users/union-1/calendars/primary/events/evt-1",
+        "/v1.0/calendar/users/user-1/calendars/primary/events/evt-1",
     ]
     assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
     assert requests[0].read().decode() == (
@@ -225,3 +225,41 @@ async def test_exchange_user_authorization_code_fetches_user_token() -> None:
         '{"clientId":"app-key","clientSecret":"app-secret","code":"auth-code",'
         '"grantType":"authorization_code"}'
     )
+
+
+@pytest.mark.asyncio
+async def test_get_user_id_by_union_id_uses_oapi_mapping() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/gettoken":
+            return httpx.Response(
+                200,
+                json={"errcode": 0, "access_token": "app-token", "expires_in": 7200},
+            )
+        return httpx.Response(
+            200,
+            json={"errcode": 0, "result": {"userid": "user-1"}},
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://oapi.dingtalk.com",
+    ) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        user_id = await client.get_user_id_by_union_id("union-1")
+
+    assert user_id == "user-1"
+    assert [request.url.path for request in requests] == [
+        "/gettoken",
+        "/topapi/user/getbyunionid",
+    ]
+    assert requests[1].url.params["access_token"] == "app-token"
+    assert requests[1].read().decode() == '{"unionid":"union-1"}'

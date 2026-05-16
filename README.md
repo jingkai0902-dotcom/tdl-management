@@ -42,6 +42,7 @@ PYTHONPATH=. .venv/bin/pytest -q
 - `DINGTALK_APP_SECRET`
 - `DINGTALK_AGENT_ID`
 - `PUBLIC_BASE_URL`
+- `DINGTALK_OAUTH_SCOPE`（默认 `openid Contact.User.Read Calendar.Event.Write`）
 - `DINGTALK_OAUTH_REDIRECT_URI`
 
 如果需要互动卡，再补：

@@ -45,8 +45,13 @@ async def finish_calendar_authorization(
         try:
             token_payload = await client.exchange_user_authorization_code(resolved_code)
             profile = await client.get_current_user_profile(token_payload["accessToken"])
+            authorized_user_id = profile.get("userId") or await client.get_user_id_by_union_id(
+                profile["unionId"]
+            )
         finally:
             await client.close()
+        if str(authorized_user_id) != dingtalk_user_id:
+            raise ValueError("Calendar authorization account does not match requested user")
         await store_calendar_authorization(
             session,
             dingtalk_user_id=dingtalk_user_id,
