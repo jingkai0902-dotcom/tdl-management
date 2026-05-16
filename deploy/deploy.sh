@@ -6,8 +6,9 @@ BACKEND_SERVICE_PATH="/etc/systemd/system/tdl-backend.service"
 STREAM_SERVICE_PATH="/etc/systemd/system/tdl-stream-bot.service"
 NGINX_SITE="${NGINX_SITE:-}"
 SERVICE_USER="${SERVICE_USER:-tdl}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
-python3 - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import sys
 
 if sys.version_info < (3, 11):
@@ -26,7 +27,7 @@ if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
 fi
 
 if [[ ! -d ".venv" ]]; then
-  python3 -m venv .venv
+  "$PYTHON_BIN" -m venv .venv
 fi
 
 .venv/bin/pip install -r requirements.txt
