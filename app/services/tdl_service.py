@@ -244,3 +244,26 @@ async def _get_actionable_tdl(session: AsyncSession, tdl_id) -> TDL:
 async def list_tdls(session: AsyncSession) -> list[TDL]:
     result = await session.execute(select(TDL).order_by(TDL.created_at.desc()))
     return list(result.scalars().all())
+
+
+async def find_latest_incomplete_draft(
+    session: AsyncSession,
+    *,
+    created_by: str,
+) -> TDL | None:
+    result = await session.execute(
+        select(TDL)
+        .where(
+            TDL.created_by == created_by,
+            TDL.source == "dingtalk_msg",
+            TDL.status == "draft",
+        )
+        .order_by(TDL.created_at.desc())
+        .limit(1)
+    )
+    tdl = result.scalar_one_or_none()
+    if tdl is None:
+        return None
+    if tdl.due_at is not None and tdl.completion_criteria is not None:
+        return None
+    return tdl

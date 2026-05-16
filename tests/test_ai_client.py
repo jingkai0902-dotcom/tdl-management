@@ -58,19 +58,20 @@ class FakeOpenAIClient:
 
 
 class FakeDeepSeekCompletions:
-    def __init__(self) -> None:
+    def __init__(self, *, content: str = "备用摘要") -> None:
         self.calls = []
+        self.content = content
 
     async def create(self, **kwargs):
         self.calls.append(kwargs)
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="备用摘要"))]
+            choices=[SimpleNamespace(message=SimpleNamespace(content=self.content))]
         )
 
 
 class FakeDeepSeekClient:
-    def __init__(self) -> None:
-        self.chat = SimpleNamespace(completions=FakeDeepSeekCompletions())
+    def __init__(self, *, content: str = "备用摘要") -> None:
+        self.chat = SimpleNamespace(completions=FakeDeepSeekCompletions(content=content))
 
 
 @pytest.mark.asyncio
@@ -94,7 +95,7 @@ async def test_provider_ai_client_uses_structured_openai_request() -> None:
 @pytest.mark.asyncio
 async def test_provider_ai_client_extracts_tdl_fields_with_structured_output() -> None:
     responses_api = FakeResponsesAPI(
-        output_text='{"title":"审核暑期班方案","owner_name":null,"due_at":"2026-05-20T18:00:00+08:00","confidence":0.92}'
+        output_text='{"title":"审核暑期班方案","owner_name":null,"due_at":"2026-05-20T18:00:00+08:00","completion_criteria":"形成最终审核意见","priority":"P1","confidence":0.92}'
     )
     client = ProviderAIClient(
         openai_client=FakeOpenAIClient(responses_api),
@@ -106,6 +107,8 @@ async def test_provider_ai_client_extracts_tdl_fields_with_structured_output() -
     assert draft.title == "审核暑期班方案"
     assert draft.owner_id is None
     assert draft.due_at is not None
+    assert draft.completion_criteria == "形成最终审核意见"
+    assert draft.priority == "P1"
     assert draft.confidence == 0.92
     assert responses_api.calls[0]["text"]["format"]["name"] == "tdl_extraction"
 
@@ -138,3 +141,45 @@ async def test_provider_ai_client_uses_deepseek_for_non_critical_fallback() -> N
 
     assert summary == "备用摘要"
     assert deepseek_client.chat.completions.calls[0]["messages"][0]["content"] == "写一条提醒"
+
+
+@pytest.mark.asyncio
+async def test_provider_ai_client_falls_back_to_deepseek_for_daily_intake() -> None:
+    responses_api = FakeResponsesAPI(error=RuntimeError("openai down"))
+    deepseek_client = FakeDeepSeekClient(
+        content='{"title":"审核暑期班方案","owner_name":null,"due_at":"2026-05-20T18:00:00+08:00","completion_criteria":"形成最终审核意见","priority":"P1","confidence":0.91}'
+    )
+    client = ProviderAIClient(
+        openai_client=FakeOpenAIClient(responses_api),
+        deepseek_client=deepseek_client,
+    )
+
+    draft = await client.extract_tdl_fields("下周三前审核暑期班方案")
+
+    assert draft.title == "审核暑期班方案"
+    assert draft.priority == "P1"
+    assert draft.completion_criteria == "形成最终审核意见"
+    assert deepseek_client.chat.completions.calls[0]["response_format"] == {
+        "type": "json_object"
+    }
+
+
+@pytest.mark.asyncio
+async def test_provider_ai_client_extracts_tdl_follow_up_with_structured_output() -> None:
+    responses_api = FakeResponsesAPI(
+        output_text='{"is_follow_up":true,"due_at":"2026-05-16T16:00:00+08:00","completion_criteria":"教会基础操作","confidence":0.94}'
+    )
+    client = ProviderAIClient(
+        openai_client=FakeOpenAIClient(responses_api),
+        deepseek_client=FakeDeepSeekClient(),
+    )
+
+    draft = await client.extract_tdl_follow_up(
+        draft_title="去钻石校区教 Claude",
+        source_text="16 点前完成，完成标准是教会基础操作",
+    )
+
+    assert draft.due_at is not None
+    assert draft.completion_criteria == "教会基础操作"
+    assert draft.confidence == 0.94
+    assert responses_api.calls[0]["text"]["format"]["name"] == "tdl_follow_up_extraction"

@@ -11,6 +11,7 @@ class TDLCreate(BaseModel):
     created_by: str = Field(min_length=1, max_length=128)
     participants: list[str] = Field(default_factory=list)
     priority: str = "P2"
+    completion_criteria: str | None = None
     source: str = "manual"
 
 
