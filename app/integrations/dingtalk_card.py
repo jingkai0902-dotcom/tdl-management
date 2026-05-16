@@ -94,7 +94,7 @@ def build_reminder_card(
             body=[
                 tdl.title,
                 f"截止：{_format_due_at(tdl.due_at)}",
-                "这条任务今天到期",
+                "今天到期，辛苦了",
                 *completion_line,
             ],
             buttons=[
@@ -105,10 +105,10 @@ def build_reminder_card(
         )
     if action == "remind_owner":
         return TDLCard(
-            title="任务提醒",
+            title="有条任务逾期了",
             body=[
                 f"{tdl.title} 已逾期 {overdue_days} 天",
-                "这条任务可能需要关注",
+                "可能需要看一下",
                 *completion_line,
             ],
             buttons=[
@@ -122,7 +122,7 @@ def build_reminder_card(
             title="需要支持",
             body=[
                 f"{tdl.title} 已逾期 {overdue_days} 天",
-                "需要关注一下吗？",
+                "是不是卡在什么地方了？",
                 *completion_line,
             ],
             buttons=[

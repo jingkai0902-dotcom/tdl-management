@@ -338,7 +338,7 @@ async def test_send_reminder_dispatches_routes_cards_to_owners() -> None:
         {
             "user_ids": ["owner-1"],
             "title": "今日待办",
-            "text": "## 今日待办\n\n测试任务\n截止：2026-05-18 18:00\n这条任务今天到期\n昨天完成了 0 条\n\n操作：\n- 标记完成\n- 暂缓",
+            "text": "## 今日待办\n\n测试任务\n截止：2026-05-18 18:00\n今天到期，辛苦了\n昨天完成了 0 条\n\n操作：\n- 标记完成\n- 暂缓",
         }
     ]
 
