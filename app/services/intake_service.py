@@ -23,6 +23,50 @@ def _follow_up_rules() -> dict:
     return load_yaml_config("tdl_rules.yaml").get("follow_up", {})
 
 
+def _management_aliases_by_user_id() -> dict[str, set[str]]:
+    roster = load_yaml_config("management_roster.yaml")
+    aliases_by_user_id: dict[str, set[str]] = {}
+    for member in roster.get("management", []):
+        user_id = member.get("dingtalk_user_id")
+        if not user_id:
+            continue
+        aliases = {
+            str(value)
+            for key in ("name", "english_name")
+            if (value := member.get(key))
+        }
+        if aliases:
+            aliases_by_user_id[str(user_id)] = aliases
+    return aliases_by_user_id
+
+
+def _mentioned_other_management_ids(source_text: str, *, sender_id: str) -> set[str]:
+    return {
+        user_id
+        for user_id, aliases in _management_aliases_by_user_id().items()
+        if user_id != sender_id and any(alias in source_text for alias in aliases)
+    }
+
+
+def _infer_assigned_owner_id(source_text: str, *, sender_id: str) -> str | None:
+    candidates = []
+    for user_id, aliases in _management_aliases_by_user_id().items():
+        if user_id == sender_id:
+            continue
+        for alias in aliases:
+            assignment_patterns = (
+                rf"(?:让|请|由)\s*{re.escape(alias)}",
+                rf"{re.escape(alias)}\s*(?:负责|跟进|完成|提交|梳理|输出)",
+            )
+            if any(re.search(pattern, source_text) for pattern in assignment_patterns):
+                candidates.append(user_id)
+                break
+    unique_candidates = set(candidates)
+    if len(unique_candidates) == 1:
+        return unique_candidates.pop()
+    return None
+
+
 def _has_explicit_due_reference(source_text: str) -> bool:
     normalized = source_text.replace(" ", "")
     patterns = (
@@ -100,7 +144,17 @@ async def intake_dingtalk_message(
             confidence=0.0,
         )
     extracted = _drop_unsupported_due_at(extracted, source_text=message.content)
-    owner_id = extracted.owner_id or message.sender_id
+    mentioned_other_ids = _mentioned_other_management_ids(
+        message.content,
+        sender_id=message.sender_id,
+    )
+    inferred_owner_id = _infer_assigned_owner_id(
+        message.content,
+        sender_id=message.sender_id,
+    )
+    owner_id = extracted.owner_id or inferred_owner_id
+    if owner_id is None and not mentioned_other_ids:
+        owner_id = message.sender_id
     payload = TDLDraftCreate(
         title=extracted.title,
         owner_id=owner_id,
@@ -117,8 +171,11 @@ async def intake_dingtalk_message(
     minimum_confidence = float(rules.get("minimum_confidence", 0.85))
     require_due_at = bool(rules.get("require_due_at", True))
     allow_if_involves_others = bool(rules.get("allow_if_involves_others", False))
+    involves_others = bool(mentioned_other_ids) or (
+        owner_id is not None and owner_id != message.sender_id
+    )
     can_auto_create = (
-        (allow_if_involves_others or owner_id == message.sender_id)
+        (allow_if_involves_others or not involves_others)
         and (not require_due_at or extracted.due_at is not None)
         and extracted.confidence >= minimum_confidence
     )

@@ -4,6 +4,7 @@ import json
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from app.config import load_yaml_config
 from app.models import TDL
 
 
@@ -33,6 +34,22 @@ def _format_due_at(value: datetime | None) -> str:
     return value.strftime("%Y-%m-%d %H:%M")
 
 
+def _format_owner(owner_id: str | None) -> str:
+    if owner_id is None:
+        return "[待补充]"
+    roster = load_yaml_config("management_roster.yaml")
+    for member in roster.get("management", []):
+        if str(member.get("dingtalk_user_id")) != owner_id:
+            continue
+        name = member.get("name")
+        english_name = member.get("english_name")
+        if name and english_name:
+            return f"{name} / {english_name}"
+        if name:
+            return str(name)
+    return owner_id
+
+
 def build_draft_card(tdl: TDL) -> TDLCard:
     missing_fields = [
         field_name
@@ -56,7 +73,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
         title="TDL 草稿",
         body=[
             tdl.title,
-            f"负责人：{tdl.owner_id or '[待补充]'}",
+            f"负责人：{_format_owner(tdl.owner_id)}",
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
             f"完成标准：{tdl.completion_criteria or '[待补充]'}",

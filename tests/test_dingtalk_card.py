@@ -35,7 +35,17 @@ def test_draft_card_contains_confirm_action() -> None:
 
     assert card.status == "draft"
     assert [button.action for button in card.buttons] == ["confirm", "cancel"]
+    assert "负责人：user-1" in card.body
     assert "完成标准：提交最终方案" in card.body
+
+
+def test_draft_card_renders_known_owner_name() -> None:
+    tdl = StubTDL("draft")
+    tdl.owner_id = "0617564550-1513038363"
+
+    card = build_draft_card(tdl)
+
+    assert "负责人：荆少巍 / Frank" in card.body
 
 
 def test_created_card_renders_markdown() -> None:
