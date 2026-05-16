@@ -144,6 +144,11 @@ async def get_valid_calendar_authorization(
     authorization = await session.get(CalendarAuthorization, dingtalk_user_id)
     if authorization is None:
         return None
+    # Calendar OpenAPI writes use the application token plus the user's union_id.
+    # User access tokens still prove consent and resolve union_id at authorization time,
+    # but they are not needed for later calendar writes.
+    if authorization.union_id:
+        return authorization
     if authorization.access_token_expires_at > current_time:
         return authorization
     if (

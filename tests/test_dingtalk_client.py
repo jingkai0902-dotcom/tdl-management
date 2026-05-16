@@ -118,17 +118,16 @@ async def test_send_interactive_card_uses_openapi_token_and_delivery_endpoint() 
 
 
 @pytest.mark.asyncio
-async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
+async def test_create_tdl_calendar_event_uses_openapi_token_and_union_id() -> None:
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
         return httpx.Response(200, json={"id": "evt-1"})
 
-    async with httpx.AsyncClient(
-        transport=httpx.MockTransport(handler),
-        base_url="https://oapi.dingtalk.com",
-    ) as http_client:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         client = DingTalkClient(
             app_key="app-key",
             app_secret="app-secret",
@@ -137,8 +136,7 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
         )
 
         event_id = await client.create_tdl_calendar_event(
-            owner_user_id="user-1",
-            user_access_token="user-token",
+            owner_union_id="union-1",
             title="完成招生方案",
             due_at=datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
             description="TDL ID: tdl-1",
@@ -146,10 +144,11 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/v1.0/calendar/users/user-1/calendars/primary/events",
+        "/v1.0/oauth2/accessToken",
+        "/v1.0/calendar/users/union-1/calendars/primary/events",
     ]
-    assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
-    assert requests[0].read().decode() == (
+    assert requests[1].headers["x-acs-dingtalk-access-token"] == "openapi-token"
+    assert requests[1].read().decode() == (
         '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
         '"start":{"dateTime":"2026-05-21T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
         '"end":{"dateTime":"2026-05-21T02:00:00+08:00","timeZone":"Asia/Shanghai"}}'
@@ -157,17 +156,16 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
+async def test_update_tdl_calendar_event_uses_existing_event_id_with_openapi_token() -> None:
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
         return httpx.Response(200, json={})
 
-    async with httpx.AsyncClient(
-        transport=httpx.MockTransport(handler),
-        base_url="https://oapi.dingtalk.com",
-    ) as http_client:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         client = DingTalkClient(
             app_key="app-key",
             app_secret="app-secret",
@@ -177,8 +175,7 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
         event_id = await client.update_tdl_calendar_event(
             event_id="evt-1",
-            owner_user_id="user-1",
-            user_access_token="user-token",
+            owner_union_id="union-1",
             title="完成招生方案",
             due_at=datetime(2026, 5, 22, 18, 0, tzinfo=UTC),
             description="TDL ID: tdl-1",
@@ -186,10 +183,11 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/v1.0/calendar/users/user-1/calendars/primary/events/evt-1",
+        "/v1.0/oauth2/accessToken",
+        "/v1.0/calendar/users/union-1/calendars/primary/events/evt-1",
     ]
-    assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
-    assert requests[0].read().decode() == (
+    assert requests[1].headers["x-acs-dingtalk-access-token"] == "openapi-token"
+    assert requests[1].read().decode() == (
         '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
         '"start":{"dateTime":"2026-05-23T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
         '"end":{"dateTime":"2026-05-23T02:00:00+08:00","timeZone":"Asia/Shanghai"}}'
