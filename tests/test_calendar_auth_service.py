@@ -89,7 +89,7 @@ async def test_store_calendar_authorization_upserts_tokens() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_valid_calendar_authorization_refreshes_expired_tokens() -> None:
+async def test_get_valid_calendar_authorization_uses_union_id_without_refreshing_token() -> None:
     now = datetime(2026, 5, 16, 8, 0, tzinfo=UTC)
     authorization = CalendarAuthorization(
         dingtalk_user_id="user-1",
@@ -103,19 +103,14 @@ async def test_get_valid_calendar_authorization_refreshes_expired_tokens() -> No
 
     class FakeDingTalkClient:
         async def refresh_user_access_token(self, refresh_token: str):
-            assert refresh_token == "old-refresh"
-            return {
-                "accessToken": "new-access",
-                "refreshToken": "new-refresh",
-                "expireIn": 7200,
-            }
+            raise AssertionError("calendar writes use union_id and app token; refresh is unnecessary")
 
-    refreshed = await get_valid_calendar_authorization(
+    resolved = await get_valid_calendar_authorization(
         session,
         dingtalk_user_id="user-1",
         client=FakeDingTalkClient(),
         now=now,
     )
 
-    assert refreshed.access_token == "new-access"
-    assert refreshed.refresh_token == "new-refresh"
+    assert resolved == authorization
+    assert resolved.union_id == "union-1"
