@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -7,6 +8,9 @@ from app.integrations.ai_client import TDLExtractionError, TDLFieldDraft, TDLFol
 from app.models import TDL
 from app.schemas import DingTalkIncomingMessage
 from app.services.intake_service import intake_dingtalk_message
+
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 class FakeSession:
@@ -147,6 +151,33 @@ async def test_intake_keeps_missing_due_date_as_draft() -> None:
 
 
 @pytest.mark.asyncio
+async def test_intake_drops_due_at_inferred_from_ambiguous_time_text() -> None:
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-ambiguous",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="下午要去钻石校区，教他们用 Claude",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="前往钻石校区教授 Claude 使用方法",
+                owner_id=None,
+                due_at=datetime(2026, 5, 16, 0, 0, tzinfo=UTC),
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.95,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "截止：[待补充]" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_falls_back_to_raw_draft_when_ai_fails() -> None:
     session = FakeSession()
     card = await intake_dingtalk_message(session, _message(), FailingAIClient())
@@ -185,12 +216,12 @@ async def test_intake_updates_latest_draft_from_text_follow_up(monkeypatch) -> N
             draft_title: str,
             source_text: str,
         ) -> TDLFollowUpDraft:
-            return TDLFollowUpDraft(
-                is_follow_up=True,
-                due_at=datetime(2026, 5, 16, 16, 0, tzinfo=UTC),
-                completion_criteria="举几个简单例子并教会基础操作",
-                confidence=0.95,
-            )
+                return TDLFollowUpDraft(
+                    is_follow_up=True,
+                    due_at=datetime(2026, 5, 16, 16, 0, tzinfo=SHANGHAI_TZ),
+                    completion_criteria="举几个简单例子并教会基础操作",
+                    confidence=0.95,
+                )
 
     monkeypatch.setattr(
         "app.services.intake_service.find_latest_incomplete_draft",

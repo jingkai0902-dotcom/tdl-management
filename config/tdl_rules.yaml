@@ -9,3 +9,7 @@ classification:
 
 draft:
   auto_cancel_after_hours: 24
+
+follow_up:
+  max_age_minutes: 15
+  minimum_confidence: 0.80

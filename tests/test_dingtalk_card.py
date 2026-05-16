@@ -44,6 +44,14 @@ def test_created_card_renders_markdown() -> None:
     assert "已创建 TDL" in render_markdown(card)
 
 
+def test_card_formats_aware_due_at_in_shanghai_time() -> None:
+    card = build_created_card(
+        StubTDL("active", due_at=datetime(2026, 5, 15, 16, 0, tzinfo=UTC))
+    )
+
+    assert "截止：2026-05-16 00:00" in card.body
+
+
 def test_draft_card_marks_missing_due_at() -> None:
     card = build_draft_card(StubTDL("draft", due_at=None))
 

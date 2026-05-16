@@ -2,8 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.models import TDL
+
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True)
@@ -24,6 +28,8 @@ class TDLCard:
 def _format_due_at(value: datetime | None) -> str:
     if value is None:
         return "[待补充]"
+    if value.tzinfo is not None:
+        value = value.astimezone(SHANGHAI_TZ)
     return value.strftime("%Y-%m-%d %H:%M")
 
 

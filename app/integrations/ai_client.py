@@ -167,6 +167,7 @@ def _build_intake_prompt(source_text: str) -> str:
 输出要求：
 1. title 保留原意，但要整理成清晰、可执行的动作。
 2. due_at 只有在原文能明确推出时才填写，使用 ISO 8601；无法确定就填 null。
+   仅有“下午 / 晚上 / 稍后 / 回头”这类模糊说法，不足以填写 due_at。
 3. completion_criteria 只有在原文明确说明“做到什么程度算完成”时才填写，否则填 null。
 4. priority 只能填 P0/P1/P2/P3：
    - P0：今天必须处理，或原文明确是紧急且重要
