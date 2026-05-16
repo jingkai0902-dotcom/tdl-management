@@ -93,9 +93,16 @@ def test_due_today_card_uses_daily_reminder_actions() -> None:
     )
 
     assert card.title == "今日待办"
-    assert "这条任务今天到期" in card.body
+    assert "今天到期，辛苦了" in card.body
     assert "昨天完成了 3 条" in card.body
     assert [button.action for button in card.buttons] == ["complete", "snooze"]
+
+
+def test_day_one_reminder_card_uses_soft_reminder_copy() -> None:
+    card = build_reminder_card(StubTDL("active"), action="remind_owner", overdue_days=1)
+
+    assert card.title == "有条任务逾期了"
+    assert "可能需要看一下" in card.body
 
 
 def test_day_two_reminder_card_asks_for_support() -> None:
@@ -103,6 +110,7 @@ def test_day_two_reminder_card_asks_for_support() -> None:
 
     assert card.title == "需要支持"
     assert "审核课程方案 已逾期 2 天" in card.body
+    assert "是不是卡在什么地方了？" in card.body
     assert [button.action for button in card.buttons] == ["complete", "postpone", "need_help"]
 
 
