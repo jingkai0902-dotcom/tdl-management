@@ -32,6 +32,9 @@ class FakeSession:
     async def refresh(self, item) -> None:
         return None
 
+    async def get(self, model, identifier):
+        return None
+
     async def execute(self, statement):
         class EmptyResult:
             @staticmethod

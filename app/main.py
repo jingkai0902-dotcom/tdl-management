@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.calendar_auth import router as calendar_auth_router
 from app.api.dingtalk_webhook import router as dingtalk_router
 from app.api.health import router as health_router
 from app.api.meetings import router as meetings_router
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.include_router(health_router)
+app.include_router(calendar_auth_router)
 app.include_router(tdl_router)
 app.include_router(dingtalk_router)
 app.include_router(meetings_router)

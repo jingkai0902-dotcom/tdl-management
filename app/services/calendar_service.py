@@ -4,6 +4,10 @@ from app.config import load_yaml_config
 from app.integrations.dingtalk_client import DingTalkAPIError, DingTalkClient
 from app.models import AuditLog, TDL
 from app.schemas import BatchConfirmDraftsRead, TDLCreate
+from app.services.calendar_auth_service import (
+    build_calendar_auth_start_url,
+    get_valid_calendar_authorization,
+)
 from app.services.tdl_service import (
     confirm_ready_drafts,
     confirm_tdl,
@@ -50,11 +54,24 @@ async def create_calendar_event_for_tdl(
         return tdl
 
     dingtalk_client = client or DingTalkClient()
+    authorization = await get_valid_calendar_authorization(
+        session,
+        dingtalk_user_id=tdl.owner_id,
+        client=dingtalk_client,
+    )
+    if authorization is None:
+        await _record_calendar_authorization_required(
+            session,
+            tdl,
+            actor_id=actor_id,
+            client=dingtalk_client,
+        )
+        return tdl
     event_id = await dingtalk_client.create_tdl_calendar_event(
-        owner_id=tdl.owner_id,
+        owner_user_id=authorization.dingtalk_user_id,
+        user_access_token=authorization.access_token,
         title=tdl.title,
         due_at=tdl.due_at,
-        participant_user_ids=tdl.participants,
         description=_calendar_description(tdl),
         duration_minutes=_calendar_duration_minutes(),
     )
@@ -84,12 +101,25 @@ async def update_calendar_event_for_tdl(
         return tdl
 
     dingtalk_client = client or DingTalkClient()
+    authorization = await get_valid_calendar_authorization(
+        session,
+        dingtalk_user_id=tdl.owner_id,
+        client=dingtalk_client,
+    )
+    if authorization is None:
+        await _record_calendar_authorization_required(
+            session,
+            tdl,
+            actor_id=actor_id,
+            client=dingtalk_client,
+        )
+        return tdl
     await dingtalk_client.update_tdl_calendar_event(
         event_id=tdl.calendar_event_id,
-        owner_id=tdl.owner_id,
+        owner_user_id=authorization.dingtalk_user_id,
+        user_access_token=authorization.access_token,
         title=tdl.title,
         due_at=tdl.due_at,
-        participant_user_ids=tdl.participants,
         description=_calendar_description(tdl),
         duration_minutes=_calendar_duration_minutes(),
     )
@@ -105,6 +135,38 @@ async def update_calendar_event_for_tdl(
     await session.commit()
     await session.refresh(tdl)
     return tdl
+
+
+async def _record_calendar_authorization_required(
+    session: AsyncSession,
+    tdl: TDL,
+    *,
+    actor_id: str,
+    client: DingTalkClient,
+) -> None:
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="calendar_authorization_required",
+            actor_id=actor_id,
+            payload={"owner_id": tdl.owner_id},
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    try:
+        await client.send_work_markdown(
+            user_ids=[tdl.owner_id],
+            title="开通日历同步",
+            text=(
+                "## 开通日历同步\n\n"
+                "要把 TDL 自动写入你的钉钉日历，需要先授权一次。\n\n"
+                f"[开通我的日历同步]({build_calendar_auth_start_url(tdl.owner_id)})"
+            ),
+        )
+    except (DingTalkAPIError, ValueError):
+        return None
 
 
 async def sync_calendar_event_best_effort(

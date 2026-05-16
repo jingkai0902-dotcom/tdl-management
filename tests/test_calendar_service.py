@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models import TDL
+from app.models import CalendarAuthorization, TDL
 from app.integrations.dingtalk_client import DingTalkAPIError
 from app.schemas import BatchConfirmDraftsRead, TDLRead
 from app.services.calendar_service import (
@@ -85,21 +85,36 @@ async def test_create_calendar_event_for_tdl_writes_event_id_and_audit() -> None
     class FakeDingTalkClient:
         async def create_tdl_calendar_event(self, **kwargs):
             assert kwargs == {
-                "owner_id": "owner-1",
+                "owner_user_id": "owner-1",
+                "user_access_token": "user-token",
                 "title": "完成招生方案",
                 "due_at": datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
-                "participant_user_ids": ["user-2"],
                 "description": f"TDL ID: {tdl.tdl_id}",
                 "duration_minutes": 30,
             }
             return "evt-1"
 
+    async def fake_get_valid_calendar_authorization(*args, **kwargs):
+        return CalendarAuthorization(
+            dingtalk_user_id="owner-1",
+            union_id="union-1",
+            access_token="user-token",
+            refresh_token="refresh-token",
+            access_token_expires_at=datetime(2026, 5, 20, 20, 0, tzinfo=UTC),
+        )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "app.services.calendar_service.get_valid_calendar_authorization",
+        fake_get_valid_calendar_authorization,
+    )
     synced = await create_calendar_event_for_tdl(
         session,
         tdl,
         actor_id="system",
         client=FakeDingTalkClient(),
     )
+    monkeypatch.undo()
 
     assert synced.calendar_event_id == "evt-1"
     assert session.items[-1].action == "calendar_create"
@@ -115,18 +130,69 @@ async def test_update_calendar_event_for_tdl_writes_audit() -> None:
     class FakeDingTalkClient:
         async def update_tdl_calendar_event(self, **kwargs):
             assert kwargs["event_id"] == "evt-1"
+            assert kwargs["owner_user_id"] == "owner-1"
+            assert kwargs["user_access_token"] == "user-token"
             assert kwargs["due_at"] == datetime(2026, 5, 20, 18, 0, tzinfo=UTC)
             return "evt-1"
 
+    async def fake_get_valid_calendar_authorization(*args, **kwargs):
+        return CalendarAuthorization(
+            dingtalk_user_id="owner-1",
+            union_id="union-1",
+            access_token="user-token",
+            refresh_token="refresh-token",
+            access_token_expires_at=datetime(2026, 5, 20, 20, 0, tzinfo=UTC),
+        )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "app.services.calendar_service.get_valid_calendar_authorization",
+        fake_get_valid_calendar_authorization,
+    )
     synced = await update_calendar_event_for_tdl(
         session,
         tdl,
         actor_id="system",
         client=FakeDingTalkClient(),
     )
+    monkeypatch.undo()
 
     assert synced.calendar_event_id == "evt-1"
     assert session.items[-1].action == "calendar_update"
+
+
+@pytest.mark.asyncio
+async def test_create_calendar_event_for_tdl_prompts_for_authorization_when_missing(monkeypatch) -> None:
+    tdl = _active_tdl()
+    session = FakeSession()
+
+    class FakeDingTalkClient:
+        async def send_work_markdown(self, **kwargs):
+            assert kwargs["user_ids"] == ["owner-1"]
+            assert kwargs["title"] == "开通日历同步"
+            assert "开通我的日历同步" in kwargs["text"]
+
+    async def fake_get_valid_calendar_authorization(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.services.calendar_service.get_valid_calendar_authorization",
+        fake_get_valid_calendar_authorization,
+    )
+    monkeypatch.setattr(
+        "app.services.calendar_service.build_calendar_auth_start_url",
+        lambda owner_id: f"https://example.com/calendar/auth/start?user_id={owner_id}",
+    )
+
+    result = await create_calendar_event_for_tdl(
+        session,
+        tdl,
+        actor_id="system",
+        client=FakeDingTalkClient(),
+    )
+
+    assert result == tdl
+    assert session.items[-1].action == "calendar_authorization_required"
 
 
 @pytest.mark.asyncio
