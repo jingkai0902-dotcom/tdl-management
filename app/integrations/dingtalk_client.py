@@ -107,16 +107,16 @@ class DingTalkClient:
     async def create_tdl_calendar_event(
         self,
         *,
-        owner_user_id: str,
-        user_access_token: str,
+        owner_union_id: str,
         title: str,
         due_at: datetime,
         description: str | None = None,
         duration_minutes: int = 30,
     ) -> str:
+        token = await self._get_openapi_access_token()
         response = await self.http_client.post(
-            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_user_id}/calendars/primary/events",
-            headers={"x-acs-dingtalk-access-token": user_access_token},
+            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_union_id}/calendars/primary/events",
+            headers={"x-acs-dingtalk-access-token": token},
             json=self._calendar_event_request_body(
                 title=title,
                 due_at=due_at,
@@ -134,16 +134,16 @@ class DingTalkClient:
         self,
         *,
         event_id: str,
-        owner_user_id: str,
-        user_access_token: str,
+        owner_union_id: str,
         title: str,
         due_at: datetime,
         description: str | None = None,
         duration_minutes: int = 30,
     ) -> str:
+        token = await self._get_openapi_access_token()
         response = await self.http_client.put(
-            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_user_id}/calendars/primary/events/{event_id}",
-            headers={"x-acs-dingtalk-access-token": user_access_token},
+            f"{OPENAPI_BASE_URL}/v1.0/calendar/users/{owner_union_id}/calendars/primary/events/{event_id}",
+            headers={"x-acs-dingtalk-access-token": token},
             json=self._calendar_event_request_body(
                 title=title,
                 due_at=due_at,
