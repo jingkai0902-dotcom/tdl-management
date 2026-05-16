@@ -85,8 +85,7 @@ async def test_create_calendar_event_for_tdl_writes_event_id_and_audit() -> None
     class FakeDingTalkClient:
         async def create_tdl_calendar_event(self, **kwargs):
             assert kwargs == {
-                "owner_user_id": "owner-1",
-                "user_access_token": "user-token",
+                "owner_union_id": "union-1",
                 "title": "完成招生方案",
                 "due_at": datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
                 "description": f"TDL ID: {tdl.tdl_id}",
@@ -130,8 +129,7 @@ async def test_update_calendar_event_for_tdl_writes_audit() -> None:
     class FakeDingTalkClient:
         async def update_tdl_calendar_event(self, **kwargs):
             assert kwargs["event_id"] == "evt-1"
-            assert kwargs["owner_user_id"] == "owner-1"
-            assert kwargs["user_access_token"] == "user-token"
+            assert kwargs["owner_union_id"] == "union-1"
             assert kwargs["due_at"] == datetime(2026, 5, 20, 18, 0, tzinfo=UTC)
             return "evt-1"
 
