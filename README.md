@@ -66,6 +66,12 @@ cp .env.example .env
 bash deploy/deploy.sh
 ```
 
+如果服务器默认 `python3` 仍是系统自带版本，可显式指定 Python 3.11：
+
+```bash
+PYTHON_BIN=python3.11 bash deploy/deploy.sh
+```
+
 部署脚本默认创建并使用专用系统用户 `tdl`。如目标服务器已经有既定服务用户，可显式指定：
 
 ```bash
