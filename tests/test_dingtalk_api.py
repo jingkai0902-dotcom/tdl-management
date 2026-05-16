@@ -79,7 +79,7 @@ async def test_update_draft_action_returns_updated_draft_card(monkeypatch) -> No
     )
 
     assert result.title == "TDL 草稿"
-    assert "负责人：0617564550-1513038363" in result.body
+    assert "负责人：荆少巍 / Frank" in result.body
     assert "完成标准：形成可执行课表" in result.body
 
 

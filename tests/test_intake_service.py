@@ -129,6 +129,34 @@ async def test_intake_keeps_cross_person_task_as_draft() -> None:
 
 
 @pytest.mark.asyncio
+async def test_intake_blocks_auto_create_when_message_mentions_other_manager() -> None:
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-other-manager",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="让时颖下周一 18 点前提交活动复盘",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="提交活动复盘",
+                owner_id=None,
+                due_at=datetime(2026, 5, 18, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria="交一页结论",
+                priority="P1",
+                confidence=0.95,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert card.status == "draft"
+    assert "负责人：时颖 / Sherry" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_keeps_missing_due_date_as_draft() -> None:
     session = FakeSession()
     card = await intake_dingtalk_message(
