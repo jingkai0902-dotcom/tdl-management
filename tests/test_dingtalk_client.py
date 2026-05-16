@@ -121,9 +121,7 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/gettoken":
-            return httpx.Response(200, json={"errcode": 0, "access_token": "token-1"})
-        return httpx.Response(200, json={"errcode": 0, "result": {"event_id": "evt-1"}})
+        return httpx.Response(200, json={"id": "evt-1"})
 
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
@@ -137,23 +135,22 @@ async def test_create_tdl_calendar_event_uses_primary_calendar() -> None:
         )
 
         event_id = await client.create_tdl_calendar_event(
-            owner_id="owner-1",
+            owner_union_id="union-1",
+            user_access_token="user-token",
             title="完成招生方案",
             due_at=datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
-            participant_user_ids=["owner-1", "user-2"],
             description="TDL ID: tdl-1",
         )
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/gettoken",
-        "/topapi/calendar/v2/event/create",
+        "/v1.0/calendar/users/union-1/calendars/primary/events",
     ]
-    assert requests[1].read().decode() == (
-        '{"agentid":"agent-1","event":{"calendar_id":"primary","summary":"完成招生方案",'
-        '"description":"TDL ID: tdl-1","start":{"timestamp":"1779298200","timezone":"Asia/Shanghai"},'
-        '"end":{"timestamp":"1779300000","timezone":"Asia/Shanghai"},"need_remind":false,'
-        '"organizer":{"userid":"owner-1"},"attendees":[{"userid":"user-2"}]}}'
+    assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
+    assert requests[0].read().decode() == (
+        '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
+        '"start":{"dateTime":"2026-05-21T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
+        '"end":{"dateTime":"2026-05-21T02:00:00+08:00","timeZone":"Asia/Shanghai"}}'
     )
 
 
@@ -163,9 +160,7 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        if request.url.path == "/gettoken":
-            return httpx.Response(200, json={"errcode": 0, "access_token": "token-1"})
-        return httpx.Response(200, json={"errcode": 0})
+        return httpx.Response(200, json={})
 
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(handler),
@@ -180,21 +175,53 @@ async def test_update_tdl_calendar_event_uses_existing_event_id() -> None:
 
         event_id = await client.update_tdl_calendar_event(
             event_id="evt-1",
-            owner_id="owner-1",
+            owner_union_id="union-1",
+            user_access_token="user-token",
             title="完成招生方案",
             due_at=datetime(2026, 5, 22, 18, 0, tzinfo=UTC),
-            participant_user_ids=["owner-1", "user-2"],
             description="TDL ID: tdl-1",
         )
 
     assert event_id == "evt-1"
     assert [request.url.path for request in requests] == [
-        "/gettoken",
-        "/topapi/calendar/v2/event/update",
+        "/v1.0/calendar/users/union-1/calendars/primary/events/evt-1",
     ]
-    assert requests[1].read().decode() == (
-        '{"agentid":"agent-1","event":{"calendar_id":"primary","summary":"完成招生方案",'
-        '"description":"TDL ID: tdl-1","start":{"timestamp":"1779471000","timezone":"Asia/Shanghai"},'
-        '"end":{"timestamp":"1779472800","timezone":"Asia/Shanghai"},"need_remind":false,'
-        '"organizer":{"userid":"owner-1"},"attendees":[{"userid":"user-2"}],"event_id":"evt-1"}}'
+    assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
+    assert requests[0].read().decode() == (
+        '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
+        '"start":{"dateTime":"2026-05-23T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
+        '"end":{"dateTime":"2026-05-23T02:00:00+08:00","timeZone":"Asia/Shanghai"}}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_exchange_user_authorization_code_fetches_user_token() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "accessToken": "user-token",
+                "refreshToken": "refresh-token",
+                "expireIn": 7200,
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        payload = await client.exchange_user_authorization_code("auth-code")
+
+    assert payload["accessToken"] == "user-token"
+    assert [request.url.path for request in requests] == ["/v1.0/oauth2/userAccessToken"]
+    assert requests[0].read().decode() == (
+        '{"clientId":"app-key","clientSecret":"app-secret","code":"auth-code",'
+        '"grantType":"authorization_code"}'
     )

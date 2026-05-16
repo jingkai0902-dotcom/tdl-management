@@ -41,6 +41,8 @@ PYTHONPATH=. .venv/bin/pytest -q
 - `DINGTALK_APP_KEY`
 - `DINGTALK_APP_SECRET`
 - `DINGTALK_AGENT_ID`
+- `PUBLIC_BASE_URL`
+- `DINGTALK_OAUTH_REDIRECT_URI`
 
 如果需要互动卡，再补：
 
@@ -84,7 +86,8 @@ SERVICE_USER=<existing-user> bash deploy/deploy.sh
 NGINX_SITE=/etc/nginx/sites-enabled/<site-name> bash deploy/deploy.sh
 ```
 
-钉钉使用 Stream 模式，机器人消息本身不依赖公网 webhook。
+钉钉机器人消息使用 Stream 模式，本身不依赖公网 webhook。  
+但个人日历授权回调需要公网 HTTPS 地址，因此如果要启用日历同步，需要让 `/tdl/calendar/auth/callback` 可从外网访问。
 
 ## 更新部署
 

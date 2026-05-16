@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     dingtalk_app_secret: str = ""
     dingtalk_agent_id: str = ""
     dingtalk_tdl_card_template_id: str = ""
+    dingtalk_oauth_redirect_uri: str = ""
+    public_base_url: str = ""
     scheduler_timezone: str = "Asia/Shanghai"
 
     feishu_app_id: str = ""
