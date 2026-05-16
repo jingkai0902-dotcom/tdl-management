@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.integrations.dingtalk_card import build_card_action_id
-from app.integrations.dingtalk_stream_bot import TDLCardCallbackHandler
+from app.integrations.dingtalk_stream_bot import TDLCardCallbackHandler, TDLChatbotHandler
 from app.services.dingtalk_card_callback_service import CardCallbackResult
 
 
@@ -14,6 +14,79 @@ class FakeSessionContext:
 
     async def __aexit__(self, exc_type, exc, tb):
         return None
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_replies_to_unsupported_message_types(monkeypatch) -> None:
+    replies = []
+
+    async def fake_intake(*args, **kwargs):
+        raise AssertionError("unsupported messages must not enter intake")
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_text",
+        lambda self, text, message: replies.append((text, message.message_type)),
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "audio",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert replies == [("当前先支持文字录入，语音和图片会在后续版本接入。", "audio")]
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        seen["content"] = payload.content
+        return SimpleNamespace()
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_markdown",
+        lambda card: "rendered",
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_text",
+        lambda self, text, message: seen.setdefault("reply", text),
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "richText",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "content": {
+                    "richText": [
+                        {"text": "今天整理活动复盘"},
+                        {"text": "完成标准是列出三条结论"},
+                    ]
+                },
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen == {
+        "content": "今天整理活动复盘\n完成标准是列出三条结论",
+        "reply": "rendered",
+    }
 
 
 @pytest.mark.asyncio

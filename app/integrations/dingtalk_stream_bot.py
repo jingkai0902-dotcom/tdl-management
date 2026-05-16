@@ -18,17 +18,28 @@ from app.services.intake_service import intake_dingtalk_message
 logger = logging.getLogger(__name__)
 
 
+def _extract_message_content(message: ChatbotMessage) -> str:
+    if message.message_type == "text":
+        return getattr(getattr(message, "text", None), "content", "") or ""
+    if message.message_type == "richText":
+        return "\n".join(message.get_text_list() or [])
+    return ""
+
+
 class TDLChatbotHandler(ChatbotHandler):
     async def process(self, callback):
         incoming = callback.data
         message = ChatbotMessage.from_dict(incoming) if isinstance(incoming, dict) else incoming
-        content = getattr(getattr(message, "text", None), "content", "") or ""
+        content = _extract_message_content(message)
         sender_id = getattr(message, "sender_staff_id", "") or getattr(message, "sender_id", "")
-        if not content or not sender_id:
+        if not sender_id:
+            return AckMessage.STATUS_OK, "OK"
+        if not content:
+            self.reply_text("当前先支持文字录入，语音和图片会在后续版本接入。", message)
             return AckMessage.STATUS_OK, "OK"
 
         payload = DingTalkIncomingMessage(
-            message_id=getattr(message, "msg_id", "") or getattr(message, "conversation_id", ""),
+            message_id=getattr(message, "message_id", "") or getattr(message, "conversation_id", ""),
             sender_id=sender_id,
             sender_nick=getattr(message, "sender_nick", None),
             content=content.strip(),
