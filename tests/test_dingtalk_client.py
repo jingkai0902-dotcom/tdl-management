@@ -1,7 +1,9 @@
 import httpx
 import pytest
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
 
+from app.config import get_settings
 from app.integrations.dingtalk_client import DingTalkAPIError, DingTalkClient
 
 
@@ -224,6 +226,64 @@ async def test_exchange_user_authorization_code_fetches_user_token() -> None:
     assert requests[0].read().decode() == (
         '{"clientId":"app-key","clientSecret":"app-secret","code":"auth-code",'
         '"grantType":"authorization_code"}'
+    )
+
+
+def test_build_user_authorization_url_uses_oauth_client_id(monkeypatch) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "oauth-client-id")
+    monkeypatch.setenv("DINGTALK_OAUTH_SCOPE", "openid Contact.User.Read Calendar.Event.Write")
+    try:
+        client = DingTalkClient(app_key="app-key", app_secret="app-secret", agent_id="agent-1")
+
+        url = client.build_user_authorization_url(
+            redirect_uri="https://example.com/calendar/auth/callback",
+            state="state-1",
+        )
+    finally:
+        get_settings.cache_clear()
+
+    query = parse_qs(urlparse(url).query)
+    assert query["client_id"] == ["oauth-client-id"]
+    assert query["scope"] == ["openid Contact.User.Read Calendar.Event.Write"]
+    assert query["redirect_uri"] == ["https://example.com/calendar/auth/callback"]
+
+
+@pytest.mark.asyncio
+async def test_exchange_user_authorization_code_uses_oauth_client_secret(monkeypatch) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "oauth-client-id")
+    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_SECRET", "oauth-client-secret")
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "accessToken": "user-token",
+                "refreshToken": "refresh-token",
+                "expireIn": 7200,
+            },
+        )
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = DingTalkClient(
+                app_key="app-key",
+                app_secret="app-secret",
+                agent_id="agent-1",
+                http_client=http_client,
+            )
+
+            payload = await client.exchange_user_authorization_code("auth-code")
+    finally:
+        get_settings.cache_clear()
+
+    assert payload["accessToken"] == "user-token"
+    assert requests[0].read().decode() == (
+        '{"clientId":"oauth-client-id","clientSecret":"oauth-client-secret",'
+        '"code":"auth-code","grantType":"authorization_code"}'
     )
 
 

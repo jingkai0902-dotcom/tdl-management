@@ -180,14 +180,15 @@ class DingTalkClient:
         }
 
     def build_user_authorization_url(self, *, redirect_uri: str, state: str) -> str:
-        if not self.app_key:
-            raise DingTalkAPIError("Missing DingTalk app_key")
         settings = get_settings()
+        client_id = settings.dingtalk_oauth_client_id or self.app_key
+        if not client_id:
+            raise DingTalkAPIError("Missing DingTalk OAuth client_id")
         query = urlencode(
             {
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
-                "client_id": self.app_key,
+                "client_id": client_id,
                 "scope": settings.dingtalk_oauth_scope or "openid",
                 "state": state,
                 "prompt": "consent",
@@ -196,11 +197,16 @@ class DingTalkClient:
         return f"{LOGIN_BASE_URL}/oauth2/auth?{query}"
 
     async def exchange_user_authorization_code(self, code: str) -> dict:
+        settings = get_settings()
+        client_id = settings.dingtalk_oauth_client_id or self.app_key
+        client_secret = settings.dingtalk_oauth_client_secret or self.app_secret
+        if not client_id or not client_secret:
+            raise DingTalkAPIError("Missing DingTalk OAuth client credentials")
         response = await self.http_client.post(
             f"{OPENAPI_BASE_URL}/v1.0/oauth2/userAccessToken",
             json={
-                "clientId": self.app_key,
-                "clientSecret": self.app_secret,
+                "clientId": client_id,
+                "clientSecret": client_secret,
                 "code": code,
                 "grantType": "authorization_code",
             },
@@ -211,11 +217,16 @@ class DingTalkClient:
         return payload
 
     async def refresh_user_access_token(self, refresh_token: str) -> dict:
+        settings = get_settings()
+        client_id = settings.dingtalk_oauth_client_id or self.app_key
+        client_secret = settings.dingtalk_oauth_client_secret or self.app_secret
+        if not client_id or not client_secret:
+            raise DingTalkAPIError("Missing DingTalk OAuth client credentials")
         response = await self.http_client.post(
             f"{OPENAPI_BASE_URL}/v1.0/oauth2/userAccessToken",
             json={
-                "clientId": self.app_key,
-                "clientSecret": self.app_secret,
+                "clientId": client_id,
+                "clientSecret": client_secret,
                 "refreshToken": refresh_token,
                 "grantType": "refresh_token",
             },
