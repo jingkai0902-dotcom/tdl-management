@@ -1,3 +1,6 @@
+from dataclasses import replace
+import re
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
@@ -16,15 +19,43 @@ def _auto_create_rules() -> dict:
     return load_yaml_config("tdl_rules.yaml").get("auto_create", {})
 
 
+def _follow_up_rules() -> dict:
+    return load_yaml_config("tdl_rules.yaml").get("follow_up", {})
+
+
+def _has_explicit_due_reference(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    patterns = (
+        r"\d{1,2}(?::\d{2})?(?:点|时)",
+        r"\d{1,2}月\d{1,2}[日号]?",
+        r"\d{1,2}[日号]",
+        r"(今天|明天|后天|大后天|周[一二三四五六日天]|星期[一二三四五六日天])",
+        r"(截止|截至|月底|月内)",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _drop_unsupported_due_at(
+    extracted: TDLFieldDraft,
+    *,
+    source_text: str,
+) -> TDLFieldDraft:
+    if extracted.due_at is None or _has_explicit_due_reference(source_text):
+        return extracted
+    return replace(extracted, due_at=None)
+
+
 async def intake_dingtalk_message(
     session: AsyncSession,
     message: DingTalkIncomingMessage,
     ai_client: AIClient | None = None,
 ) -> TDLCard:
     client = ai_client or get_ai_client()
+    follow_up_rules = _follow_up_rules()
     latest_draft = await find_latest_incomplete_draft(
         session,
         created_by=message.sender_id,
+        max_age_minutes=int(follow_up_rules.get("max_age_minutes", 15)),
     )
     if latest_draft is not None:
         try:
@@ -37,7 +68,8 @@ async def intake_dingtalk_message(
         if (
             follow_up is not None
             and follow_up.is_follow_up
-            and follow_up.confidence >= 0.80
+            and follow_up.confidence
+            >= float(follow_up_rules.get("minimum_confidence", 0.80))
         ):
             updates = TDLDraftUpdate(
                 due_at=follow_up.due_at if latest_draft.due_at is None else None,
@@ -67,6 +99,7 @@ async def intake_dingtalk_message(
             priority="P2",
             confidence=0.0,
         )
+    extracted = _drop_unsupported_due_at(extracted, source_text=message.content)
     owner_id = extracted.owner_id or message.sender_id
     payload = TDLDraftCreate(
         title=extracted.title,
@@ -97,6 +130,7 @@ async def intake_dingtalk_message(
             created_by=payload.created_by,
             participants=payload.participants,
             priority=payload.priority,
+            completion_criteria=payload.completion_criteria,
             source=payload.source,
         )
         tdl = await create_tdl_with_calendar(session, create_payload)

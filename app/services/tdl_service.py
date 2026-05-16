@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -250,20 +250,38 @@ async def find_latest_incomplete_draft(
     session: AsyncSession,
     *,
     created_by: str,
+    max_age_minutes: int = 15,
 ) -> TDL | None:
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=max_age_minutes)
     result = await session.execute(
         select(TDL)
         .where(
             TDL.created_by == created_by,
             TDL.source == "dingtalk_msg",
             TDL.status == "draft",
+            TDL.created_at >= cutoff,
         )
         .order_by(TDL.created_at.desc())
         .limit(1)
     )
     tdl = result.scalar_one_or_none()
-    if tdl is None:
-        return None
+    if is_follow_up_candidate(
+        tdl,
+        now=datetime.now(tz=UTC),
+        max_age_minutes=max_age_minutes,
+    ):
+        return tdl
+    return None
+
+
+def is_follow_up_candidate(
+    tdl: TDL | None,
+    *,
+    now: datetime,
+    max_age_minutes: int,
+) -> bool:
+    if tdl is None or tdl.created_at is None:
+        return False
     if tdl.due_at is not None and tdl.completion_criteria is not None:
-        return None
-    return tdl
+        return False
+    return tdl.created_at >= now - timedelta(minutes=max_age_minutes)

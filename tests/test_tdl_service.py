@@ -11,6 +11,7 @@ from app.services.tdl_service import (
     confirm_tdl,
     postpone_tdl,
     request_help_tdl,
+    is_follow_up_candidate,
     snooze_tdl,
     update_draft_tdl,
 )
@@ -77,6 +78,17 @@ def test_tdl_read_next_actions_follow_missing_fields() -> None:
     assert complete.next_actions == ["confirm"]
     assert complete.recommended_fields == ["completion_criteria"]
     assert complete.recommended_actions == ["set_completion_criteria"]
+
+
+def test_is_follow_up_candidate_rejects_stale_drafts() -> None:
+    now = datetime(2026, 5, 16, 12, 0, tzinfo=UTC)
+    fresh = _draft_tdl(owner_id="0617564550-1513038363")
+    fresh.created_at = datetime(2026, 5, 16, 11, 55, tzinfo=UTC)
+    stale = _draft_tdl(owner_id="0617564550-1513038363")
+    stale.created_at = datetime(2026, 5, 16, 10, 0, tzinfo=UTC)
+
+    assert is_follow_up_candidate(fresh, now=now, max_age_minutes=15) is True
+    assert is_follow_up_candidate(stale, now=now, max_age_minutes=15) is False
 
 
 @pytest.mark.asyncio
