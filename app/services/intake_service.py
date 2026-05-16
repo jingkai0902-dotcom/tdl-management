@@ -3,9 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import load_yaml_config
 from app.integrations.ai_client import AIClient, TDLExtractionError, TDLFieldDraft, get_ai_client
 from app.integrations.dingtalk_card import TDLCard, build_created_card, build_draft_card
-from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate
+from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate, TDLDraftUpdate
 from app.services.calendar_service import create_tdl_with_calendar
-from app.services.tdl_service import create_draft_tdl
+from app.services.tdl_service import (
+    create_draft_tdl,
+    find_latest_incomplete_draft,
+    update_draft_tdl,
+)
 
 
 def _auto_create_rules() -> dict:
@@ -18,6 +22,40 @@ async def intake_dingtalk_message(
     ai_client: AIClient | None = None,
 ) -> TDLCard:
     client = ai_client or get_ai_client()
+    latest_draft = await find_latest_incomplete_draft(
+        session,
+        created_by=message.sender_id,
+    )
+    if latest_draft is not None:
+        try:
+            follow_up = await client.extract_tdl_follow_up(
+                draft_title=latest_draft.title,
+                source_text=message.content,
+            )
+        except TDLExtractionError:
+            follow_up = None
+        if (
+            follow_up is not None
+            and follow_up.is_follow_up
+            and follow_up.confidence >= 0.80
+        ):
+            updates = TDLDraftUpdate(
+                due_at=follow_up.due_at if latest_draft.due_at is None else None,
+                completion_criteria=(
+                    follow_up.completion_criteria
+                    if latest_draft.completion_criteria is None
+                    else None
+                ),
+            )
+            if updates.model_dump(exclude_none=True):
+                tdl = await update_draft_tdl(
+                    session,
+                    latest_draft.tdl_id,
+                    updates,
+                    message.sender_id,
+                )
+                return build_draft_card(tdl)
+
     try:
         extracted = await client.extract_tdl_fields(message.content)
     except TDLExtractionError:
@@ -25,6 +63,8 @@ async def intake_dingtalk_message(
             title=message.content.strip()[:500],
             owner_id=None,
             due_at=None,
+            completion_criteria=None,
+            priority="P2",
             confidence=0.0,
         )
     owner_id = extracted.owner_id or message.sender_id
@@ -35,6 +75,8 @@ async def intake_dingtalk_message(
         created_by=message.sender_id,
         source="dingtalk_msg",
         raw_text=message.content,
+        completion_criteria=extracted.completion_criteria,
+        priority=extracted.priority,
         confidence=extracted.confidence,
     )
 
