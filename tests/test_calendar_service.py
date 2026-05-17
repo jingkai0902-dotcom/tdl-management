@@ -88,8 +88,9 @@ async def test_create_calendar_event_for_tdl_writes_event_id_and_audit() -> None
                 "owner_union_id": "union-1",
                 "title": "完成招生方案",
                 "due_at": datetime(2026, 5, 20, 18, 0, tzinfo=UTC),
-                "description": f"TDL ID: {tdl.tdl_id}",
+                "description": "优先级：P1\n负责人：owner-1\n完成标准：[待补充]\n\n—— 来自 TDL 任务管理系统",
                 "duration_minutes": 30,
+                "is_busy": True,
             }
             return "evt-1"
 

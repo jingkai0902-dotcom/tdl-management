@@ -21,8 +21,33 @@ def _calendar_duration_minutes() -> int:
     return int(calendar.get("default_duration_minutes", 30))
 
 
+def _format_owner_name(owner_id: str | None) -> str:
+    if owner_id is None:
+        return "[待指定]"
+    roster = load_yaml_config("management_roster.yaml")
+    for member in roster.get("management", []):
+        if str(member.get("dingtalk_user_id")) == owner_id:
+            name = member.get("name", "")
+            en = member.get("english_name", "")
+            return f"{name} / {en}" if name and en else (name or owner_id)
+    return owner_id
+
+
 def _calendar_description(tdl: TDL) -> str:
-    return f"TDL ID: {tdl.tdl_id}"
+    owner = _format_owner_name(tdl.owner_id)
+    criteria = tdl.completion_criteria or "[待补充]"
+    return (
+        f"优先级：{tdl.priority}\n"
+        f"负责人：{owner}\n"
+        f"完成标准：{criteria}\n"
+        f"\n"
+        f"—— 来自 TDL 任务管理系统"
+    )
+
+
+def _calendar_is_busy(tdl: TDL) -> bool:
+    """P0/P1 tasks mark the time as busy; P2/P3 as free."""
+    return tdl.priority in ("P0", "P1")
 
 
 def should_create_calendar_event(tdl: TDL) -> bool:
@@ -73,6 +98,7 @@ async def create_calendar_event_for_tdl(
         due_at=tdl.due_at,
         description=_calendar_description(tdl),
         duration_minutes=_calendar_duration_minutes(),
+        is_busy=_calendar_is_busy(tdl),
     )
     tdl.calendar_event_id = event_id
     session.add(
@@ -120,6 +146,7 @@ async def update_calendar_event_for_tdl(
         due_at=tdl.due_at,
         description=_calendar_description(tdl),
         duration_minutes=_calendar_duration_minutes(),
+        is_busy=_calendar_is_busy(tdl),
     )
     session.add(
         AuditLog(
