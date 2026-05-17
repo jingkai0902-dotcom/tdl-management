@@ -42,7 +42,48 @@ async def test_chatbot_handler_replies_to_unsupported_message_types(monkeypatch)
 
     assert code == 200
     assert payload == "OK"
-    assert replies == [("当前先支持文字录入，语音和图片会在后续版本接入。", "audio")]
+    assert replies == [("未能识别语音内容，请尝试用文字描述。", "audio")]
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_accepts_audio_recognition_as_text(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        seen["content"] = payload.content
+        return SimpleNamespace(status="active", buttons=[])
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: {"card": "rendered"},
+    )
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_markdown",
+        lambda card: "rendered",
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_card",
+        lambda self, card_data, message: seen.setdefault("reply_card", card_data) or "card-id",
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "audio",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "content": {"recognition": "明天下午 6 点前整理续费复盘"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen["content"] == "明天下午 6 点前整理续费复盘"
+    assert seen["reply_card"] == {"card": "rendered"}
 
 
 @pytest.mark.asyncio

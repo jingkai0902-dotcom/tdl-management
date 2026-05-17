@@ -12,6 +12,7 @@ from app.integrations.ai_client import (
     _to_decision_drafts,
     _to_tdl_field_draft,
     _to_tdl_follow_up_draft,
+    _openai_client_kwargs,
 )
 
 
@@ -105,6 +106,24 @@ class FakeDeepSeekCompletions:
 class FakeDeepSeekClient:
     def __init__(self, *, content: str = "备用摘要") -> None:
         self.chat = SimpleNamespace(completions=FakeDeepSeekCompletions(content=content))
+
+
+def test_openai_client_kwargs_includes_optional_base_url() -> None:
+    settings = SimpleNamespace(
+        openai_api_key="test-key",
+        openai_base_url="https://openai-gateway.example.com/v1",
+    )
+
+    assert _openai_client_kwargs(settings) == {
+        "api_key": "test-key",
+        "base_url": "https://openai-gateway.example.com/v1",
+    }
+
+
+def test_openai_client_kwargs_omits_empty_base_url() -> None:
+    settings = SimpleNamespace(openai_api_key="test-key", openai_base_url="")
+
+    assert _openai_client_kwargs(settings) == {"api_key": "test-key"}
 
 
 @pytest.mark.asyncio
