@@ -221,6 +221,51 @@ async def test_card_callback_handler_reads_standard_card_action_ids(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_card_callback_handler_cancels_draft(monkeypatch) -> None:
+    tdl_id = uuid4()
+    cancel_action_id = build_card_action_id("cancel", tdl_id)
+
+    async def fake_handle_tdl_card_callback(session, *, action_id, actor_id, submitted_fields):
+        assert session == "session"
+        assert action_id == cancel_action_id
+        assert actor_id == "user-1"
+        return CardCallbackResult(
+            handled=True,
+            action="cancel",
+            tdl_id=str(tdl_id),
+            status="canceled",
+            response_text="已忽略草稿",
+        )
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_tdl_card_callback",
+        fake_handle_tdl_card_callback,
+    )
+    # also stub out the feedback sender to avoid DingTalkClient init
+    async def fake_feedback(actor_id, text):
+        return None
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot._send_card_action_feedback",
+        fake_feedback,
+    )
+
+    code, payload = await TDLCardCallbackHandler().process(
+        SimpleNamespace(
+            data={
+                "userId": "user-1",
+                "content": '{"cardPrivateData":{"actionIds":["' + cancel_action_id + '"],"params":{}}}',
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload["handled"] is True
+    assert payload["action"] == "cancel"
+    assert payload["status"] == "canceled"
+
+
+@pytest.mark.asyncio
 async def test_card_callback_handler_passes_follow_up_fields(monkeypatch) -> None:
     tdl_id = uuid4()
 

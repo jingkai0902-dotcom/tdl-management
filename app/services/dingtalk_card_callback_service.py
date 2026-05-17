@@ -13,6 +13,7 @@ from app.schemas import (
     TDLDraftUpdate,
 )
 from app.services.tdl_service import (
+    cancel_draft_tdl,
     complete_tdl,
     request_help_tdl,
     snooze_tdl,
@@ -31,12 +32,14 @@ class CardCallbackResult:
     status: str | None = None
     next_action: str | None = None
     required_fields: list[str] | None = None
+    response_text: str | None = None
 
 
 ONE_CLICK_ACTIONS = {
     "confirm": confirm_tdl_with_calendar,
     "complete": complete_tdl,
     "need_help": request_help_tdl,
+    "cancel": cancel_draft_tdl,
 }
 
 FOLLOW_UP_ACTIONS = {
@@ -193,11 +196,19 @@ async def handle_tdl_card_callback(
                 submission=submission,
             )
             if tdl is not None:
+                follow_up_feedback = {
+                    "set_owner": "负责人已更新",
+                    "set_due_at": "截止时间已更新",
+                    "postpone": "已延期",
+                    "snooze": "已暂缓",
+                    "set_completion_criteria": "完成标准已更新",
+                }
                 return CardCallbackResult(
                     handled=True,
                     action=action,
                     tdl_id=str(tdl.tdl_id),
                     status=tdl.status,
+                    response_text=follow_up_feedback.get(action, f"已更新：{action}"),
                 )
         next_action, required_fields = follow_up
         return CardCallbackResult(
@@ -209,9 +220,16 @@ async def handle_tdl_card_callback(
         )
 
     tdl = await handler(session, tdl_id, actor_id)
+    feedback = {
+        "confirm": "TDL 已创建",
+        "complete": "已完成",
+        "need_help": "已标记为需要协助",
+        "cancel": "已忽略草稿",
+    }.get(action, f"操作完成：{action}")
     return CardCallbackResult(
         handled=True,
         action=action,
         tdl_id=str(tdl.tdl_id),
         status=tdl.status,
+        response_text=feedback,
     )
