@@ -11,6 +11,7 @@ from app.api.dingtalk_webhook import (
     confirm_action,
     need_help_action,
     postpone_action,
+    reject_action,
     snooze_action,
     update_draft_action,
 )
@@ -19,6 +20,7 @@ from app.schemas import (
     BatchConfirmDraftsRequest,
     DingTalkAction,
     TDLPostponeAction,
+    TDLRejectAction,
     TDLSnoozeAction,
     TDLDraftUpdate,
     TDLRead,
@@ -234,3 +236,46 @@ async def test_need_help_action_marks_attention(monkeypatch) -> None:
     )
 
     assert result.status == "attention"
+
+
+@pytest.mark.asyncio
+async def test_reject_action_marks_rejected(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_reject_tdl(session, incoming_tdl_id, actor_id, *, reason):
+        assert session is None
+        assert incoming_tdl_id == tdl_id
+        assert actor_id == "0617564550-1513038363"
+        assert reason == "not_my_task"
+        return SimpleNamespace(tdl_id=tdl_id, status="rejected", cancel_reason=reason)
+
+    monkeypatch.setattr("app.api.dingtalk_webhook.reject_tdl", fake_reject_tdl)
+
+    result = await reject_action(
+        TDLRejectAction(
+            action="reject",
+            tdl_id=tdl_id,
+            actor_id="0617564550-1513038363",
+            reason="not_my_task",
+        ),
+        session=None,
+    )
+
+    assert result.status == "rejected"
+    assert result.cancel_reason == "not_my_task"
+
+
+@pytest.mark.asyncio
+async def test_reject_action_returns_conflict_for_non_owner(monkeypatch) -> None:
+    async def fake_reject_tdl(session, incoming_tdl_id, actor_id, *, reason):
+        raise ValueError("Only the current owner can reject an assigned TDL")
+
+    monkeypatch.setattr("app.api.dingtalk_webhook.reject_tdl", fake_reject_tdl)
+
+    with pytest.raises(HTTPException) as exc:
+        await reject_action(
+            TDLRejectAction(action="reject", tdl_id=uuid4(), actor_id="other-user"),
+            session=None,
+        )
+
+    assert exc.value.status_code == 409

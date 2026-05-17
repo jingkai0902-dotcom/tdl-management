@@ -53,6 +53,7 @@ def test_created_card_renders_markdown() -> None:
     card = build_created_card(StubTDL("active"))
 
     assert "已创建 TDL" in render_markdown(card)
+    assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
 
 
 def test_card_formats_aware_due_at_in_shanghai_time() -> None:
@@ -114,7 +115,7 @@ def test_due_today_card_uses_daily_reminder_actions() -> None:
     assert card.title == "今日待办"
     assert "今天到期，辛苦了" in card.body
     assert "昨天完成了 3 条" in card.body
-    assert [button.action for button in card.buttons] == ["complete", "snooze"]
+    assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
 
 
 def test_day_one_reminder_card_uses_soft_reminder_copy() -> None:
@@ -130,7 +131,12 @@ def test_day_two_reminder_card_asks_for_support() -> None:
     assert card.title == "需要支持"
     assert "审核课程方案 已逾期 2 天" in card.body
     assert "是不是卡在什么地方了？" in card.body
-    assert [button.action for button in card.buttons] == ["complete", "postpone", "need_help"]
+    assert [button.action for button in card.buttons] == [
+        "complete",
+        "postpone",
+        "need_help",
+        "reject",
+    ]
 
 
 def test_render_interactive_card_data_keeps_button_actions() -> None:

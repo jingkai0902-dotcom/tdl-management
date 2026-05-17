@@ -57,13 +57,14 @@ async def cancel_draft_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     if tdl.status != "draft":
         raise ValueError("Only draft TDLs can be canceled through draft intake")
     tdl.status = "canceled"
+    tdl.cancel_reason = "draft_ignored"
     session.add(
         AuditLog(
             entity_type="tdl",
             entity_id=str(tdl.tdl_id),
             action="cancel",
             actor_id=actor_id,
-            payload={},
+            payload={"reason": tdl.cancel_reason},
         )
     )
     await session.commit()
@@ -246,6 +247,32 @@ async def request_help_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
             action="need_help",
             actor_id=actor_id,
             payload={},
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    return tdl
+
+
+async def reject_tdl(
+    session: AsyncSession,
+    tdl_id,
+    actor_id: str,
+    *,
+    reason: str = "owner_rejected",
+) -> TDL:
+    tdl = await _get_actionable_tdl(session, tdl_id)
+    if tdl.owner_id != actor_id:
+        raise ValueError("Only the current owner can reject an assigned TDL")
+    tdl.status = "rejected"
+    tdl.cancel_reason = reason
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="reject",
+            actor_id=actor_id,
+            payload={"reason": reason},
         )
     )
     await session.commit()

@@ -28,6 +28,7 @@ class TDLRead(BaseModel):
     owner_id: str | None
     due_at: datetime | None
     status: str
+    cancel_reason: str | None = None
     priority: str
     source: str
     completion_criteria: str | None = None
@@ -47,6 +48,7 @@ class TDLRead(BaseModel):
                 "owner_id": tdl.owner_id,
                 "due_at": tdl.due_at,
                 "status": tdl.status,
+                "cancel_reason": getattr(tdl, "cancel_reason", None),
                 "priority": tdl.priority,
                 "source": tdl.source,
                 "completion_criteria": tdl.completion_criteria,
@@ -67,6 +69,8 @@ class TDLRead(BaseModel):
 
     @staticmethod
     def _next_actions_for_tdl(tdl) -> list[str]:
+        if getattr(tdl, "status") != "draft":
+            return []
         actions = []
         if getattr(tdl, "owner_id") is None:
             actions.append("set_owner")
@@ -78,6 +82,8 @@ class TDLRead(BaseModel):
 
     @staticmethod
     def _recommended_actions_for_tdl(tdl) -> list[str]:
+        if getattr(tdl, "status") != "draft":
+            return []
         if getattr(tdl, "completion_criteria") is None:
             return ["set_completion_criteria"]
         return []
@@ -94,6 +100,10 @@ class DingTalkAction(BaseModel):
     action: str
     tdl_id: UUID
     actor_id: str
+
+
+class TDLRejectAction(DingTalkAction):
+    reason: str = Field(default="owner_rejected", min_length=1, max_length=255)
 
 
 class TDLPostponeAction(BaseModel):

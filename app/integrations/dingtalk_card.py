@@ -94,6 +94,7 @@ def build_created_card(tdl: TDL) -> TDLCard:
         buttons=[
             CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
             CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+            CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
         ],
         status=tdl.status,
     )
@@ -134,6 +135,7 @@ def build_reminder_card(
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
                 CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+                CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
             ],
             status=tdl.status,
         )
@@ -148,6 +150,7 @@ def build_reminder_card(
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
                 CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+                CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
             ],
             status=tdl.status,
         )
@@ -163,6 +166,7 @@ def build_reminder_card(
                 CardButton(label="已完成", action="complete", tdl_id=tdl.tdl_id),
                 CardButton(label="延期", action="postpone", tdl_id=tdl.tdl_id),
                 CardButton(label="需协助", action="need_help", tdl_id=tdl.tdl_id),
+                CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
             ],
             status=tdl.status,
         )
