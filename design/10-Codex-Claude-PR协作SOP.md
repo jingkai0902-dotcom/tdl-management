@@ -130,7 +130,52 @@ Do not modify files. Review only.
 
 ---
 
-## 四、Claude 审核时最常见的卡点
+## 四、如何实际把 review 请求发给 Claude
+
+### 当前项目的实际做法：用 Computer Use 操作 Claude 桌面端
+
+本项目里，Codex 不是通过 API 调 Claude，而是：
+
+1. 用 `Computer Use` 打开本机 Claude 桌面端
+2. 找到当前 review 会话，或新建一个 review 会话
+3. 把上一节准备好的**完整单条消息**一次性填入输入框
+4. 点击发送
+5. 等 Claude 审完
+6. 再用 `Computer Use` 读取 Claude 输出，摘取结论、阻塞问题、非阻塞建议
+
+这比把内容拆成几条消息手动补充更稳，因为 Codex 能在发送前把 review brief 一次组装完整。
+
+### 操作原则
+
+- **先组装完整消息，再发送**
+- 不允许“先发 PR 链接占位，之后再补范围”
+- 如果 Claude 已经开始审，除非它卡住，否则不要中途补充碎片信息
+- 如果必须纠偏，第二条消息也必须是明确、完整、可执行的，例如：
+
+```text
+Please continue the same review, but use local branch `pr-43` in `/path/to/repo` instead of fetching GitHub. Review only the diff against `origin/main`.
+```
+
+### 从 Claude 取回 review 时，至少记录四件事
+
+| 项目 | 说明 |
+|------|------|
+| 结论 | `LGTM / 可以合并 / 需要返工` |
+| 阻塞项 | 不修不能合的 bug、数据风险、设计冲突 |
+| 非阻塞项 | 可后补的测试、命名、可维护性建议 |
+| 复审要求 | 修完后是否需要再让 Claude 看一次 |
+
+### 什么时候不适合用 Computer Use
+
+| 场景 | 处理 |
+|------|------|
+| Claude 桌面端没登录 | 先让用户登录 |
+| 桌面端卡死或不可用 | 不要乱点，改用文本记录并稍后重试 |
+| 需要批量长期审查很多仓库 | 再考虑做 Skill / API 化，而不是继续堆 UI 自动化 |
+
+---
+
+## 五、Claude 审核时最常见的卡点
 
 ### 卡点 1：GitHub 私有仓库访问失败
 
@@ -170,7 +215,7 @@ Local unpushed commits: no?
 
 ---
 
-## 五、Codex 取回 review 后怎么处理
+## 六、Codex 取回 review 后怎么处理
 
 Claude 的 review 分三类。
 
@@ -217,7 +262,7 @@ git fetch origin main
 
 ---
 
-## 六、部署与验证顺序
+## 七、部署与验证顺序
 
 推荐顺序：
 
@@ -251,7 +296,7 @@ git fetch origin main
 
 ---
 
-## 七、什么时候不要让 Claude 审
+## 八、什么时候不要让 Claude 审
 
 以下情况先不要发：
 
@@ -265,7 +310,7 @@ git fetch origin main
 
 ---
 
-## 八、推荐给新对话的启动提示
+## 九、推荐给新对话的启动提示
 
 后续新开 Codex 对话，可以直接贴：
 
@@ -286,7 +331,7 @@ Claude 审完后，按阻塞 / 非阻塞 / LGTM 三类处理。
 
 ---
 
-## 九、是否需要做成 skill 或 agent 自动化
+## 十、是否需要做成 skill 或 agent 自动化
 
 ### 当前建议：先做成 Skill，而不是 Agent
 
@@ -325,7 +370,7 @@ Agent 自动化适合：
 
 ---
 
-## 十、最低质量门槛
+## 十一、最低质量门槛
 
 每次合并前至少满足：
 
