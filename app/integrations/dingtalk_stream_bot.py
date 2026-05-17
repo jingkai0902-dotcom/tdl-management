@@ -5,6 +5,7 @@ import logging
 
 import dingtalk_stream
 from dingtalk_stream import AckMessage, CallbackHandler, CardCallbackMessage
+from dingtalk_stream.frames import Headers
 from dingtalk_stream.chatbot import ChatbotHandler, ChatbotMessage
 
 from app.config import get_settings
@@ -89,6 +90,10 @@ class TDLCardCallbackHandler(CallbackHandler):
                 actor_id=actor_id,
                 submitted_fields=params,
             )
+
+        if result.handled and result.response_text:
+            await _send_card_action_feedback(actor_id, result.response_text)
+
         return AckMessage.STATUS_OK, {
             "handled": result.handled,
             "action": result.action,
@@ -97,6 +102,33 @@ class TDLCardCallbackHandler(CallbackHandler):
             "nextAction": result.next_action,
             "requiredFields": result.required_fields,
         }
+
+    async def raw_process(self, callback_message):
+        """Override to include card update instructions for visual feedback."""
+        code, message = await self.process(callback_message)
+        ack_message = AckMessage()
+        ack_message.code = code
+        ack_message.headers.message_id = callback_message.headers.message_id
+        ack_message.headers.content_type = Headers.CONTENT_TYPE_APPLICATION_JSON
+        ack_message.data = {
+            "response": message,
+            "cardUpdateOptions": {"updateCardDataByKey": True},
+        }
+        return ack_message
+
+
+async def _send_card_action_feedback(actor_id: str, text: str) -> None:
+    """Send a work notification so the user sees immediate feedback after clicking a card button."""
+    try:
+        from app.integrations.dingtalk_client import DingTalkClient
+        client = DingTalkClient()
+        await client.send_work_markdown(
+            user_ids=[actor_id],
+            title="TDL",
+            text=text,
+        )
+    except Exception:
+        logger.exception("Failed to send card action feedback to user=%s", actor_id)
 
 
 def run_stream_bot() -> None:
