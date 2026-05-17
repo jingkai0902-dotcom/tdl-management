@@ -588,3 +588,116 @@ async def test_intake_ignores_latest_recent_draft_from_direct_text_command(monke
 
     assert card.title == "已忽略草稿"
     assert draft.status == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_intake_normalizes_unsupported_p0_when_missing_explicit_urgency() -> None:
+    """AI may infer P0 from a bare "today" mention, but that alone is not enough.
+    Without explicit urgency keywords, P0 should normalize down to P1 (has due_at)
+    or P2 (no due_at). This test covers the P0→P1 case."""
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-relaxed-today",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="今天整理一下课件材料",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="整理课件材料",
+                owner_id=None,
+                due_at=datetime(2026, 5, 17, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                priority="P0",
+                confidence=0.70,  # below auto-create threshold so we get a draft card
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "优先级：P1" in card.body
+
+
+@pytest.mark.asyncio
+async def test_intake_normalizes_unsupported_p0_to_p2_when_no_due_at() -> None:
+    """P0 without due_at and without urgency → P2 (general planned item)."""
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-no-date-p0",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="抽空看看课表要不要调整",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="检查课表调整",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P0",
+                confidence=0.50,
+            )
+        ),
+    )
+
+    assert "优先级：P2" in card.body
+
+
+@pytest.mark.asyncio
+async def test_intake_command_confirm_on_incomplete_draft_returns_draft_card(monkeypatch) -> None:
+    """When a user texts "确认创建" but the draft is still missing required fields,
+    confirm_tdl_with_calendar raises ValueError and we fall back to showing the draft card."""
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="整理标准化流程文档",
+        owner_id="0617564550-1513038363",
+        due_at=None,  # missing – draft is incomplete
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_recent_draft(*args, **kwargs):
+        return draft
+
+    async def fake_confirm_tdl_with_calendar(session, tdl_id, actor_id):
+        raise ValueError("TDL is not complete")
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_draft",
+        fake_find_latest_recent_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.confirm_tdl_with_calendar",
+        fake_confirm_tdl_with_calendar,
+    )
+
+    card = await intake_dingtalk_message(
+        FakeSession(),
+        DingTalkIncomingMessage(
+            message_id="msg-confirm-incomplete",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="确认创建",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert card.status == "draft"
+    assert draft.status == "draft"  # not confirmed, not canceled
