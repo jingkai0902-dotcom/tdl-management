@@ -112,6 +112,7 @@ class DingTalkClient:
         due_at: datetime,
         description: str | None = None,
         duration_minutes: int = 30,
+        is_busy: bool = True,
     ) -> str:
         token = await self._get_openapi_access_token()
         response = await self.http_client.post(
@@ -122,6 +123,7 @@ class DingTalkClient:
                 due_at=due_at,
                 description=description,
                 duration_minutes=duration_minutes,
+                is_busy=is_busy,
             ),
         )
         payload = response.json()
@@ -139,6 +141,7 @@ class DingTalkClient:
         due_at: datetime,
         description: str | None = None,
         duration_minutes: int = 30,
+        is_busy: bool = True,
     ) -> str:
         token = await self._get_openapi_access_token()
         response = await self.http_client.put(
@@ -149,6 +152,7 @@ class DingTalkClient:
                 due_at=due_at,
                 description=description,
                 duration_minutes=duration_minutes,
+                is_busy=is_busy,
             ),
         )
         payload = response.json()
@@ -163,10 +167,11 @@ class DingTalkClient:
         due_at: datetime,
         description: str | None = None,
         duration_minutes: int = 30,
+        is_busy: bool = True,
     ) -> dict:
         due_at_local = due_at.astimezone(SHANGHAI_TZ)
         start_at_local = (due_at - timedelta(minutes=duration_minutes)).astimezone(SHANGHAI_TZ)
-        return {
+        body = {
             "summary": title,
             "description": description or "",
             "start": {
@@ -177,7 +182,9 @@ class DingTalkClient:
                 "dateTime": due_at_local.isoformat(),
                 "timeZone": "Asia/Shanghai",
             },
+            "showMeAs": "busy" if is_busy else "free",
         }
+        return body
 
     def build_user_authorization_url(self, *, redirect_uri: str, state: str) -> str:
         settings = get_settings()
