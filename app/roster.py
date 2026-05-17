@@ -23,6 +23,21 @@ _HOMOPHONE_EQUIVALENTS = {
     "杨": {"阳", "洋"},
 }
 
+_FUZZY_MATCH_REVIEWED_NAMES = {
+    "李珍",
+    "张蕾",
+    "荆少巍",
+    "张皓",
+    "许梦冉",
+    "时颖",
+    "苗雅楠",
+    "李肖",
+    "赵晓华",
+    "曹艳明",
+    "韩雪敏",
+    "邢杨",
+}
+
 
 def _management_roster() -> list[dict]:
     return load_yaml_config("management_roster.yaml").get("management", [])
@@ -50,6 +65,16 @@ def roster_name_to_user_id() -> dict[str, str]:
         for alias in aliases:
             mapping[alias] = user_id
     return mapping
+
+
+def unreviewed_fuzzy_match_names() -> set[str]:
+    """Names that were added to the roster without fuzzy-match review."""
+    roster_names = {
+        str(member["name"]).strip()
+        for member in _management_roster()
+        if member.get("name")
+    }
+    return roster_names - _FUZZY_MATCH_REVIEWED_NAMES
 
 
 def format_management_name(user_id: str | None) -> str | None:
