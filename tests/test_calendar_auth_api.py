@@ -85,3 +85,37 @@ async def test_calendar_auth_callback_rejects_mismatched_user(monkeypatch) -> No
 
     assert exc.value.status_code == 400
     assert exc.value.detail == "Calendar authorization account does not match requested user"
+
+
+@pytest.mark.asyncio
+async def test_calendar_auth_callback_explains_missing_contact_scope(monkeypatch) -> None:
+    class FakeDingTalkClient:
+        async def exchange_user_authorization_code(self, code: str):
+            return {
+                "accessToken": "access-1",
+                "refreshToken": "refresh-1",
+                "expireIn": 7200,
+                "scope": "openid Calendar.Event.Write",
+            }
+
+        async def get_current_user_profile(self, access_token: str):
+            raise calendar_auth.DingTalkAPIError(
+                "Failed to get DingTalk current user profile: "
+                "{'code': 'Forbidden.AccessDenied.AccessTokenPermissionDenied', "
+                "'accessdenieddetail': {'requiredScopes': ['Contact.User.Read']}}"
+            )
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(calendar_auth, "DingTalkClient", FakeDingTalkClient)
+    monkeypatch.setattr(calendar_auth, "parse_calendar_auth_state", lambda state: "user-1")
+
+    response = await calendar_auth.finish_calendar_authorization(
+        state="state-1",
+        auth_code="auth-code",
+        session=FakeSession(),
+    )
+
+    assert response.status_code == 403
+    assert "Contact.User.Read" in response.body.decode()
