@@ -99,6 +99,17 @@ def build_created_card(tdl: TDL) -> TDLCard:
     )
 
 
+def build_canceled_card(tdl: TDL) -> TDLCard:
+    return TDLCard(
+        title="已忽略草稿",
+        body=[
+            tdl.title,
+        ],
+        buttons=[],
+        status=tdl.status,
+    )
+
+
 def build_reminder_card(
     tdl: TDL,
     *,
@@ -187,6 +198,52 @@ def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
             },
             ensure_ascii=False,
         ),
+    }
+
+
+def render_standard_card_data(
+    card: TDLCard,
+    *,
+    include_actions: bool = True,
+    extra_body_lines: list[str] | None = None,
+) -> dict:
+    """Render a built-in DingTalk StandardCard payload for chatbot replies."""
+    body_lines = [*card.body, *(extra_body_lines or [])]
+    contents = [
+        {
+            "type": "markdown",
+            "text": "\n".join(body_lines),
+            "id": "tdl_body",
+        }
+    ]
+    if include_actions and card.buttons:
+        contents.append({"type": "divider", "id": "tdl_divider"})
+        contents.append(
+            {
+                "type": "action",
+                "actions": [
+                    {
+                        "type": "button",
+                        "label": {
+                            "type": "text",
+                            "text": button.label,
+                            "id": f"tdl_button_label_{index}",
+                        },
+                        "actionType": "request",
+                        "status": "primary" if index == 0 else "normal",
+                        "id": build_card_action_id(button.action, button.tdl_id),
+                    }
+                    for index, button in enumerate(card.buttons)
+                ],
+                "id": "tdl_actions",
+            }
+        )
+    return {
+        "config": {"autoLayout": True, "enableForward": False},
+        "header": {
+            "title": {"type": "text", "text": card.title},
+        },
+        "contents": contents,
     }
 
 

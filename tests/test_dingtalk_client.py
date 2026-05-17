@@ -195,7 +195,10 @@ async def test_update_tdl_calendar_event_uses_existing_event_id_with_openapi_tok
 
 
 @pytest.mark.asyncio
-async def test_exchange_user_authorization_code_fetches_user_token() -> None:
+async def test_exchange_user_authorization_code_fetches_user_token(monkeypatch) -> None:
+    get_settings.cache_clear()
+    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "")
+    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_SECRET", "")
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -209,15 +212,18 @@ async def test_exchange_user_authorization_code_fetches_user_token() -> None:
             },
         )
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        client = DingTalkClient(
-            app_key="app-key",
-            app_secret="app-secret",
-            agent_id="agent-1",
-            http_client=http_client,
-        )
+    try:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+            client = DingTalkClient(
+                app_key="app-key",
+                app_secret="app-secret",
+                agent_id="agent-1",
+                http_client=http_client,
+            )
 
-        payload = await client.exchange_user_authorization_code("auth-code")
+            payload = await client.exchange_user_authorization_code("auth-code")
+    finally:
+        get_settings.cache_clear()
 
     assert payload["accessToken"] == "user-token"
     assert [request.url.path for request in requests] == ["/v1.0/oauth2/userAccessToken"]

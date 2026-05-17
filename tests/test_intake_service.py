@@ -262,6 +262,7 @@ async def test_intake_drops_due_at_inferred_from_ambiguous_time_text() -> None:
 
     assert card.title == "TDL 草稿"
     assert "截止：[待补充]" in card.body
+    assert "优先级：P2" in card.body
 
 
 @pytest.mark.asyncio
@@ -345,6 +346,73 @@ async def test_intake_updates_latest_draft_from_text_follow_up(monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_intake_skips_follow_up_ai_for_obvious_new_cross_person_task(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="与李珍沟通招生复盘",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 18, 18, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    class CountingAIClient(FakeAIClient):
+        def __init__(self, tdl_draft: TDLFieldDraft) -> None:
+            super().__init__(tdl_draft)
+            self.follow_up_calls = 0
+
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            self.follow_up_calls += 1
+            return await super().extract_tdl_follow_up(
+                draft_title=draft_title,
+                source_text=source_text,
+            )
+
+    client = CountingAIClient(
+        TDLFieldDraft(
+            title="提交直播复盘",
+            owner_id="0962151633-1819579479",
+            due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+            completion_criteria="形成一页结论",
+            priority="P1",
+            confidence=0.95,
+        )
+    )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-new-task-after-draft",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="请时颖下周三前提交直播复盘，完成标准是形成一页结论",
+        ),
+        client,
+    )
+
+    assert client.follow_up_calls == 0
+    assert card.title == "TDL 草稿"
+    assert "负责人：时颖 / Sherry" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_normalizes_date_only_follow_up_to_end_of_workday(monkeypatch) -> None:
     session = FakeSession()
     draft = TDL(
@@ -412,3 +480,111 @@ async def test_intake_normalizes_date_only_follow_up_to_end_of_workday(monkeypat
 
     assert card.title == "TDL 草稿"
     assert "2026-05-18 18:00" in card.body[2]
+
+
+@pytest.mark.asyncio
+async def test_intake_confirms_latest_recent_draft_from_direct_text_command(monkeypatch) -> None:
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="前往钻石校区教团队使用 Claude",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 17, 17, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="能独立操作基础功能",
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_recent_draft(*args, **kwargs):
+        return draft
+
+    async def fake_confirm_tdl_with_calendar(session, tdl_id, actor_id):
+        draft.status = "active"
+        return draft
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_draft",
+        fake_find_latest_recent_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.confirm_tdl_with_calendar",
+        fake_confirm_tdl_with_calendar,
+    )
+
+    card = await intake_dingtalk_message(
+        FakeSession(),
+        DingTalkIncomingMessage(
+            message_id="msg-confirm-command",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="确认创建",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert draft.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_intake_ignores_latest_recent_draft_from_direct_text_command(monkeypatch) -> None:
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="前往钻石校区教团队使用 Claude",
+        owner_id="0617564550-1513038363",
+        due_at=None,
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_recent_draft(*args, **kwargs):
+        return draft
+
+    async def fake_cancel_draft_tdl(session, tdl_id, actor_id):
+        draft.status = "canceled"
+        return draft
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_draft",
+        fake_find_latest_recent_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.cancel_draft_tdl",
+        fake_cancel_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        FakeSession(),
+        DingTalkIncomingMessage(
+            message_id="msg-ignore-command",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="忽略",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已忽略草稿"
+    assert draft.status == "canceled"

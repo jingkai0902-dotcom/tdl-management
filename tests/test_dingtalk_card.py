@@ -9,6 +9,7 @@ from app.integrations.dingtalk_card import (
     parse_card_action_id,
     render_interactive_card_data,
     render_markdown,
+    render_standard_card_data,
 )
 
 
@@ -140,6 +141,32 @@ def test_render_interactive_card_data_keeps_button_actions() -> None:
     assert result["msgTitle"] == "需要支持"
     assert "审核课程方案 已逾期 2 天" in result["staticMsgContent"]
     assert build_card_action_id("complete", card.buttons[0].tdl_id) in result["sys_full_json_obj"]
+
+
+def test_render_standard_card_data_keeps_button_actions() -> None:
+    card = build_reminder_card(StubTDL("active"), action="ask_owner", overdue_days=2)
+
+    result = render_standard_card_data(card)
+
+    assert result["header"]["title"]["text"] == "需要支持"
+    assert "审核课程方案 已逾期 2 天" in result["contents"][0]["text"]
+    assert (
+        result["contents"][2]["actions"][0]["id"]
+        == build_card_action_id("complete", card.buttons[0].tdl_id)
+    )
+
+
+def test_render_standard_card_data_can_hide_button_actions() -> None:
+    card = build_reminder_card(StubTDL("active"), action="ask_owner", overdue_days=2)
+
+    result = render_standard_card_data(
+        card,
+        include_actions=False,
+        extra_body_lines=["请直接回复处理。"],
+    )
+
+    assert len(result["contents"]) == 1
+    assert result["contents"][0]["text"].endswith("请直接回复处理。")
 
 
 def test_parse_card_action_id_reads_action_and_tdl_id() -> None:

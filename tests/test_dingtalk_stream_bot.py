@@ -51,7 +51,7 @@ async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
 
     async def fake_intake(session, payload):
         seen["content"] = payload.content
-        return SimpleNamespace()
+        return SimpleNamespace(status="active", buttons=[])
 
     monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
     monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
@@ -59,10 +59,19 @@ async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
         "app.integrations.dingtalk_stream_bot.render_markdown",
         lambda card: "rendered",
     )
+
+    def fake_render_standard_card_data(card, **kwargs):
+        seen["card_kwargs"] = kwargs
+        return {"card": "rendered"}
+
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        fake_render_standard_card_data,
+    )
     monkeypatch.setattr(
         TDLChatbotHandler,
-        "reply_text",
-        lambda self, text, message: seen.setdefault("reply", text),
+        "reply_card",
+        lambda self, card_data, message: seen.setdefault("reply_card", card_data) or "card-id",
     )
 
     code, payload = await TDLChatbotHandler().process(
@@ -85,8 +94,49 @@ async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
     assert payload == "OK"
     assert seen == {
         "content": "今天整理活动复盘\n完成标准是列出三条结论",
-        "reply": "rendered",
+        "card_kwargs": {"include_actions": False, "extra_body_lines": []},
+        "reply_card": {"card": "rendered"},
     }
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_falls_back_to_markdown_when_card_send_fails(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        return SimpleNamespace(title="TDL 草稿", status="active", buttons=[])
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: {"card": "rendered"},
+    )
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_markdown",
+        lambda card: "rendered markdown",
+    )
+    monkeypatch.setattr(TDLChatbotHandler, "reply_card", lambda self, card_data, message: "")
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_markdown",
+        lambda self, title, text, message: seen.setdefault("reply_markdown", (title, text)),
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "text": {"content": "今天整理活动复盘"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen["reply_markdown"] == ("TDL 草稿", "rendered markdown")
 
 
 @pytest.mark.asyncio
@@ -131,6 +181,43 @@ async def test_card_callback_handler_routes_action(monkeypatch) -> None:
         "nextAction": None,
         "requiredFields": None,
     }
+
+
+@pytest.mark.asyncio
+async def test_card_callback_handler_reads_standard_card_action_ids(monkeypatch) -> None:
+    tdl_id = uuid4()
+    expected_action_id = build_card_action_id("confirm", tdl_id)
+
+    async def fake_handle_tdl_card_callback(session, *, action_id, actor_id, submitted_fields):
+        assert session == "session"
+        assert action_id == expected_action_id
+        assert actor_id == "user-1"
+        assert submitted_fields == {}
+        return CardCallbackResult(
+            handled=True,
+            action="confirm",
+            tdl_id=str(tdl_id),
+            status="active",
+        )
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_tdl_card_callback",
+        fake_handle_tdl_card_callback,
+    )
+
+    code, payload = await TDLCardCallbackHandler().process(
+        SimpleNamespace(
+            data={
+                "userId": "user-1",
+                "content": '{"cardPrivateData":{"actionIds":["' + expected_action_id + '"],"params":{}}}',
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload["handled"] is True
+    assert payload["status"] == "active"
 
 
 @pytest.mark.asyncio

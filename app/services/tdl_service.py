@@ -50,6 +50,27 @@ async def create_draft_tdl(session: AsyncSession, payload: TDLDraftCreate) -> TD
     return tdl
 
 
+async def cancel_draft_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
+    tdl = await session.get(TDL, tdl_id)
+    if tdl is None:
+        raise ValueError("TDL not found")
+    if tdl.status != "draft":
+        raise ValueError("Only draft TDLs can be canceled through draft intake")
+    tdl.status = "canceled"
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="cancel",
+            actor_id=actor_id,
+            payload={},
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    return tdl
+
+
 async def confirm_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     tdl = await session.get(TDL, tdl_id)
     if tdl is None:
@@ -272,6 +293,27 @@ async def find_latest_incomplete_draft(
     ):
         return tdl
     return None
+
+
+async def find_latest_recent_draft(
+    session: AsyncSession,
+    *,
+    created_by: str,
+    max_age_minutes: int = 15,
+) -> TDL | None:
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=max_age_minutes)
+    result = await session.execute(
+        select(TDL)
+        .where(
+            TDL.created_by == created_by,
+            TDL.source == "dingtalk_msg",
+            TDL.status == "draft",
+            TDL.created_at >= cutoff,
+        )
+        .order_by(TDL.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 def is_follow_up_candidate(

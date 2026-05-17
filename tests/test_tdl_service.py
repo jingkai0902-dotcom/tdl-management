@@ -6,6 +6,7 @@ import pytest
 from app.models import TDL
 from app.schemas import TDLDraftUpdate
 from app.services.tdl_service import (
+    cancel_draft_tdl,
     complete_tdl,
     confirm_ready_drafts,
     confirm_tdl,
@@ -100,6 +101,16 @@ async def test_confirm_tdl_rejects_incomplete_draft() -> None:
         await confirm_tdl(session, tdl.tdl_id, "0617564550-1513038363")
 
     assert tdl.status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_cancel_draft_tdl_marks_draft_canceled() -> None:
+    tdl = _draft_tdl()
+    session = FakeSession(tdl)
+
+    canceled = await cancel_draft_tdl(session, tdl.tdl_id, "0617564550-1513038363")
+
+    assert canceled.status == "canceled"
 
 
 @pytest.mark.asyncio
