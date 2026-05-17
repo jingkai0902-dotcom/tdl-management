@@ -9,7 +9,7 @@ from dingtalk_stream.chatbot import ChatbotHandler, ChatbotMessage
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.integrations.dingtalk_card import render_markdown
+from app.integrations.dingtalk_card import render_markdown, render_standard_card_data
 from app.schemas import DingTalkIncomingMessage
 from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
 from app.services.intake_service import intake_dingtalk_message
@@ -24,6 +24,15 @@ def _extract_message_content(message: ChatbotMessage) -> str:
     if message.message_type == "richText":
         return "\n".join(message.get_text_list() or [])
     return ""
+
+
+def _chatbot_card_footer_lines(card) -> list[str]:
+    if card.status != "draft":
+        return []
+    has_confirm = any(button.action == "confirm" for button in card.buttons)
+    if has_confirm:
+        return ["可直接回复“确认创建”激活，或回复“忽略”取消。"]
+    return ["可直接回复补充缺失信息，或回复“忽略”取消。"]
 
 
 class TDLChatbotHandler(ChatbotHandler):
@@ -46,7 +55,13 @@ class TDLChatbotHandler(ChatbotHandler):
         )
         async with SessionLocal() as session:
             card = await intake_dingtalk_message(session, payload)
-        self.reply_text(render_markdown(card), message)
+        card_data = render_standard_card_data(
+            card,
+            include_actions=False,
+            extra_body_lines=_chatbot_card_footer_lines(card),
+        )
+        if not self.reply_card(card_data, message):
+            self.reply_markdown(card.title, render_markdown(card), message)
         return AckMessage.STATUS_OK, "OK"
 
 
@@ -55,9 +70,16 @@ class TDLCardCallbackHandler(CallbackHandler):
         incoming = CardCallbackMessage.from_dict(callback.data)
         card_private_data = incoming.content.get("cardPrivateData", {})
         params = card_private_data.get("params", {})
-        action_id = params.get("actionId") or params.get("action_id") or params.get("action")
+        action_ids = card_private_data.get("actionIds") or []
+        action_id = (
+            params.get("actionId")
+            or params.get("action_id")
+            or params.get("action")
+            or (action_ids[0] if action_ids else None)
+        )
         actor_id = incoming.user_id
         if not action_id or not actor_id:
+            logger.warning("Unusable DingTalk card callback content: %s", incoming.content)
             return AckMessage.STATUS_BAD_REQUEST, {"handled": False}
 
         async with SessionLocal() as session:

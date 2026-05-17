@@ -6,12 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
 from app.integrations.ai_client import AIClient, TDLExtractionError, TDLFieldDraft, get_ai_client
-from app.integrations.dingtalk_card import TDLCard, build_created_card, build_draft_card
+from app.integrations.dingtalk_card import (
+    TDLCard,
+    build_canceled_card,
+    build_created_card,
+    build_draft_card,
+)
 from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate, TDLDraftUpdate
-from app.services.calendar_service import create_tdl_with_calendar
+from app.services.calendar_service import confirm_tdl_with_calendar, create_tdl_with_calendar
 from app.services.tdl_service import (
+    cancel_draft_tdl,
     create_draft_tdl,
     find_latest_incomplete_draft,
+    find_latest_recent_draft,
     update_draft_tdl,
 )
 
@@ -85,6 +92,17 @@ def _has_explicit_time_reference(source_text: str) -> bool:
     return bool(re.search(r"\d{1,2}(?::\d{2})?(?:点|时)", normalized))
 
 
+def _has_explicit_urgency_reference(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    patterns = (
+        r"(紧急|立刻|马上|火急)",
+        r"(必须|务必)(?:今天|今日)?",
+        r"(今天|今日)(?:必须|务必|截止|最晚)",
+        r"(最晚|截止)(?:今天|今日)",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
 def _drop_unsupported_due_at(
     extracted: TDLFieldDraft,
     *,
@@ -111,6 +129,73 @@ def _normalize_date_only_due_at(
     return due_at.replace(hour=18)
 
 
+def _normalize_unsupported_p0(
+    extracted: TDLFieldDraft,
+    *,
+    source_text: str,
+) -> TDLFieldDraft:
+    if extracted.priority != "P0" or _has_explicit_urgency_reference(source_text):
+        return extracted
+    return replace(extracted, priority="P1" if extracted.due_at is not None else "P2")
+
+
+def _mentions_completion_criteria(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    return any(
+        token in normalized
+        for token in ("完成标准", "做到什么程度", "算完成", "验收标准")
+    )
+
+
+def _should_attempt_follow_up(
+    latest_draft,
+    *,
+    source_text: str,
+    sender_id: str,
+) -> bool:
+    if latest_draft is None:
+        return False
+    # 当前 follow-up 只补 due_at / completion_criteria。消息一旦明确提到其他管理者，
+    # 更可能是在创建新任务，不值得先多跑一次 AI 判断。
+    if _mentioned_other_management_ids(source_text, sender_id=sender_id):
+        return False
+    return (
+        latest_draft.due_at is None and _has_explicit_due_reference(source_text)
+    ) or (
+        latest_draft.completion_criteria is None and _mentions_completion_criteria(source_text)
+    )
+
+
+def _normalize_direct_command(source_text: str) -> str:
+    return re.sub(r"[\s。！？!?.，,]", "", source_text)
+
+
+async def _handle_direct_draft_command(
+    session: AsyncSession,
+    message: DingTalkIncomingMessage,
+    *,
+    max_age_minutes: int,
+) -> TDLCard | None:
+    command = _normalize_direct_command(message.content)
+    if command not in {"确认创建", "确认", "忽略", "取消"}:
+        return None
+    latest_draft = await find_latest_recent_draft(
+        session,
+        created_by=message.sender_id,
+        max_age_minutes=max_age_minutes,
+    )
+    if latest_draft is None:
+        return None
+    if command in {"忽略", "取消"}:
+        tdl = await cancel_draft_tdl(session, latest_draft.tdl_id, message.sender_id)
+        return build_canceled_card(tdl)
+    try:
+        tdl = await confirm_tdl_with_calendar(session, latest_draft.tdl_id, message.sender_id)
+    except ValueError:
+        return build_draft_card(latest_draft)
+    return build_created_card(tdl)
+
+
 async def intake_dingtalk_message(
     session: AsyncSession,
     message: DingTalkIncomingMessage,
@@ -118,12 +203,24 @@ async def intake_dingtalk_message(
 ) -> TDLCard:
     client = ai_client or get_ai_client()
     follow_up_rules = _follow_up_rules()
+    max_age_minutes = int(follow_up_rules.get("max_age_minutes", 15))
+    direct_command_card = await _handle_direct_draft_command(
+        session,
+        message,
+        max_age_minutes=max_age_minutes,
+    )
+    if direct_command_card is not None:
+        return direct_command_card
     latest_draft = await find_latest_incomplete_draft(
         session,
         created_by=message.sender_id,
-        max_age_minutes=int(follow_up_rules.get("max_age_minutes", 15)),
+        max_age_minutes=max_age_minutes,
     )
-    if latest_draft is not None:
+    if _should_attempt_follow_up(
+        latest_draft,
+        source_text=message.content,
+        sender_id=message.sender_id,
+    ):
         try:
             follow_up = await client.extract_tdl_follow_up(
                 draft_title=latest_draft.title,
@@ -180,6 +277,7 @@ async def intake_dingtalk_message(
             source_text=message.content,
         ),
     )
+    extracted = _normalize_unsupported_p0(extracted, source_text=message.content)
     mentioned_other_ids = _mentioned_other_management_ids(
         message.content,
         sender_id=message.sender_id,
