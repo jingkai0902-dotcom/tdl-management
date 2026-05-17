@@ -13,6 +13,10 @@ from app.integrations.dingtalk_card import (
     build_draft_card,
 )
 from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate, TDLDraftUpdate
+from app.roster import (
+    management_aliases_by_user_id,
+    resolve_management_user_id,
+)
 from app.services.calendar_service import confirm_tdl_with_calendar, create_tdl_with_calendar
 from app.services.tdl_service import (
     cancel_draft_tdl,
@@ -32,28 +36,19 @@ def _follow_up_rules() -> dict:
 
 
 def _management_aliases_by_user_id() -> dict[str, set[str]]:
-    roster = load_yaml_config("management_roster.yaml")
-    aliases_by_user_id: dict[str, set[str]] = {}
-    for member in roster.get("management", []):
-        user_id = member.get("dingtalk_user_id")
-        if not user_id:
-            continue
-        aliases = {
-            str(value)
-            for key in ("name", "english_name")
-            if (value := member.get(key))
-        }
-        if aliases:
-            aliases_by_user_id[str(user_id)] = aliases
-    return aliases_by_user_id
+    return management_aliases_by_user_id()
 
 
 def _mentioned_other_management_ids(source_text: str, *, sender_id: str) -> set[str]:
-    return {
+    exact_matches = {
         user_id
         for user_id, aliases in _management_aliases_by_user_id().items()
         if user_id != sender_id and any(alias in source_text for alias in aliases)
     }
+    fuzzy_match = resolve_management_user_id(source_text, exclude_user_id=sender_id)
+    if fuzzy_match:
+        exact_matches.add(fuzzy_match)
+    return exact_matches
 
 
 def _infer_assigned_owner_id(source_text: str, *, sender_id: str) -> str | None:
@@ -72,6 +67,9 @@ def _infer_assigned_owner_id(source_text: str, *, sender_id: str) -> str | None:
     unique_candidates = set(candidates)
     if len(unique_candidates) == 1:
         return unique_candidates.pop()
+    fuzzy_candidate = resolve_management_user_id(source_text, exclude_user_id=sender_id)
+    if fuzzy_candidate and re.search(r"(?:让|请|由)\s*[\u4e00-\u9fa5A-Za-z]{1,20}", source_text):
+        return fuzzy_candidate
     return None
 
 
@@ -147,6 +145,17 @@ def _mentions_completion_criteria(source_text: str) -> bool:
     )
 
 
+def _looks_like_draft_correction(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    patterns = (
+        r"(刚才|上面|前面|上一条).{0,12}(打错|说错|写错|错了|更正|纠正)",
+        r"(不是|别写成|不要写成).{1,12}(是|改成|换成)",
+        r"(改成|换成|更正为|纠正为)",
+        r"^是[\u4e00-\u9fa5A-Za-z]{1,20}$",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
 def _should_attempt_follow_up(
     latest_draft,
     *,
@@ -155,15 +164,31 @@ def _should_attempt_follow_up(
 ) -> bool:
     if latest_draft is None:
         return False
-    # 当前 follow-up 只补 due_at / completion_criteria。消息一旦明确提到其他管理者，
-    # 更可能是在创建新任务，不值得先多跑一次 AI 判断。
-    if _mentioned_other_management_ids(source_text, sender_id=sender_id):
+    is_correction = _looks_like_draft_correction(source_text)
+    # 明确提到他人但不是纠错时，通常是在创建新任务；纠错消息仍应进入 follow-up 判断。
+    if not is_correction and _mentioned_other_management_ids(source_text, sender_id=sender_id):
         return False
     return (
-        latest_draft.due_at is None and _has_explicit_due_reference(source_text)
-    ) or (
-        latest_draft.completion_criteria is None and _mentions_completion_criteria(source_text)
+        is_correction
+        or (
+            latest_draft.owner_id is None
+            and resolve_management_user_id(source_text, exclude_user_id=sender_id) is not None
+        )
+        or (
+            latest_draft.due_at is None and _has_explicit_due_reference(source_text)
+        )
+        or (
+            latest_draft.completion_criteria is None and _mentions_completion_criteria(source_text)
+        )
     )
+
+
+def _follow_up_owner_id(source_text: str, *, sender_id: str, ai_owner_id: str | None) -> str | None:
+    if ai_owner_id:
+        return ai_owner_id
+    if not _looks_like_draft_correction(source_text):
+        return None
+    return resolve_management_user_id(source_text, exclude_user_id=sender_id)
 
 
 def _normalize_direct_command(source_text: str) -> str:
@@ -235,6 +260,11 @@ async def intake_dingtalk_message(
             >= float(follow_up_rules.get("minimum_confidence", 0.80))
         ):
             updates = TDLDraftUpdate(
+                owner_id=_follow_up_owner_id(
+                    message.content,
+                    sender_id=message.sender_id,
+                    ai_owner_id=follow_up.owner_id,
+                ),
                 due_at=(
                     _normalize_date_only_due_at(
                         follow_up.due_at,
@@ -278,6 +308,7 @@ async def intake_dingtalk_message(
         ),
     )
     extracted = _normalize_unsupported_p0(extracted, source_text=message.content)
+    resolved_owner_id = resolve_management_user_id(extracted.owner_id)
     mentioned_other_ids = _mentioned_other_management_ids(
         message.content,
         sender_id=message.sender_id,
@@ -286,7 +317,7 @@ async def intake_dingtalk_message(
         message.content,
         sender_id=message.sender_id,
     )
-    owner_id = extracted.owner_id or inferred_owner_id or message.sender_id
+    owner_id = resolved_owner_id or extracted.owner_id or inferred_owner_id or message.sender_id
     payload = TDLDraftCreate(
         title=extracted.title,
         owner_id=owner_id,
