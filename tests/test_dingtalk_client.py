@@ -195,10 +195,8 @@ async def test_update_tdl_calendar_event_uses_existing_event_id_with_openapi_tok
 
 
 @pytest.mark.asyncio
-async def test_exchange_user_authorization_code_fetches_user_token(monkeypatch) -> None:
+async def test_exchange_user_authorization_code_fetches_user_token() -> None:
     get_settings.cache_clear()
-    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "")
-    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_SECRET", "")
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -233,9 +231,8 @@ async def test_exchange_user_authorization_code_fetches_user_token(monkeypatch) 
     )
 
 
-def test_build_user_authorization_url_uses_oauth_client_id(monkeypatch) -> None:
+def test_build_user_authorization_url_uses_app_key(monkeypatch) -> None:
     get_settings.cache_clear()
-    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "oauth-client-id")
     monkeypatch.setenv("DINGTALK_OAUTH_SCOPE", "openid Contact.User.Read Calendar.Event.Write")
     try:
         client = DingTalkClient(app_key="app-key", app_secret="app-secret", agent_id="agent-1")
@@ -248,16 +245,14 @@ def test_build_user_authorization_url_uses_oauth_client_id(monkeypatch) -> None:
         get_settings.cache_clear()
 
     query = parse_qs(urlparse(url).query)
-    assert query["client_id"] == ["oauth-client-id"]
+    assert query["client_id"] == ["app-key"]
     assert query["scope"] == ["openid Contact.User.Read Calendar.Event.Write"]
     assert query["redirect_uri"] == ["https://example.com/calendar/auth/callback"]
 
 
 @pytest.mark.asyncio
-async def test_exchange_user_authorization_code_uses_oauth_client_secret(monkeypatch) -> None:
+async def test_exchange_user_authorization_code_uses_app_credentials() -> None:
     get_settings.cache_clear()
-    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_ID", "oauth-client-id")
-    monkeypatch.setenv("DINGTALK_OAUTH_CLIENT_SECRET", "oauth-client-secret")
     requests = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -286,7 +281,7 @@ async def test_exchange_user_authorization_code_uses_oauth_client_secret(monkeyp
 
     assert payload["accessToken"] == "user-token"
     assert requests[0].read().decode() == (
-        '{"clientId":"oauth-client-id","clientSecret":"oauth-client-secret",'
+        '{"clientId":"app-key","clientSecret":"app-secret",'
         '"code":"auth-code","grantType":"authorization_code"}'
     )
 
