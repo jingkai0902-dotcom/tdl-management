@@ -256,3 +256,80 @@ async def test_card_callback_handler_passes_follow_up_fields(monkeypatch) -> Non
     assert code == 200
     assert payload["handled"] is True
     assert payload["action"] == "postpone"
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_shows_confirmation_hint_for_complete_draft(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        return SimpleNamespace(
+            title="TDL 草稿",
+            body=["test body"],
+            status="draft",
+            buttons=[SimpleNamespace(action="confirm", label="确认创建", tdl_id=None)],
+        )
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: seen.setdefault("card_kwargs", kwargs) or {"card": "rendered"},
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler, "reply_card", lambda self, card_data, message: "ok"
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "text": {"content": "test"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert "确认创建" in seen["card_kwargs"]["extra_body_lines"][0]
+    assert "忽略" in seen["card_kwargs"]["extra_body_lines"][0]
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_shows_supplement_hint_for_incomplete_draft(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        return SimpleNamespace(
+            title="TDL 草稿",
+            body=["test body"],
+            status="draft",
+            buttons=[SimpleNamespace(action="set_due_at", label="补截止时间", tdl_id=None)],
+        )
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: seen.setdefault("card_kwargs", kwargs) or {"card": "rendered"},
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler, "reply_card", lambda self, card_data, message: "ok"
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "text": {"content": "test"},
+            }
+        )
+    )
+
+    assert code == 200
+    footer = seen["card_kwargs"]["extra_body_lines"][0]
+    assert "补充缺失信息" in footer
+    assert "忽略" in footer
