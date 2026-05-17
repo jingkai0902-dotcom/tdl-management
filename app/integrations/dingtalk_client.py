@@ -183,6 +183,12 @@ class DingTalkClient:
                 "timeZone": "Asia/Shanghai",
             },
             "showMeAs": "busy" if is_busy else "free",
+            "reminders": [
+                {
+                    "method": "app",
+                    "minutes": 5,
+                }
+            ],
         }
         return body
 
