@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.services.calendar_auth_service import (
 
 
 router = APIRouter(prefix="/calendar/auth", tags=["calendar-auth"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/start")
@@ -44,6 +47,11 @@ async def finish_calendar_authorization(
         client = DingTalkClient()
         try:
             token_payload = await client.exchange_user_authorization_code(resolved_code)
+            logger.info(
+                "DingTalk calendar authorization exchanged for user=%s scope=%s",
+                dingtalk_user_id,
+                token_payload.get("scope"),
+            )
             profile = await client.get_current_user_profile(token_payload["accessToken"])
             authorized_user_id = profile.get("userId") or await client.get_user_id_by_union_id(
                 profile["unionId"]
@@ -61,5 +69,12 @@ async def finish_calendar_authorization(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except DingTalkAPIError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        message = str(exc)
+        if "Contact.User.Read" in message:
+            return HTMLResponse(
+                "日历同步暂未开通成功：当前授权没有包含通讯录个人信息读权限（Contact.User.Read）。"
+                "请稍后重新点一次授权；如果仍然失败，请联系管理员检查钉钉权限是否已发布生效。",
+                status_code=403,
+            )
+        raise HTTPException(status_code=502, detail=message) from exc
     return HTMLResponse("日历同步已开通，可以关闭这个页面。")
