@@ -168,6 +168,7 @@ def _build_intake_prompt(source_text: str) -> str:
 1. title 保留原意，但要整理成清晰、可执行的动作。
 2. due_at 只有在原文能明确推出时才填写，使用 ISO 8601；无法确定就填 null。
    仅有“下午 / 晚上 / 稍后 / 回头”这类模糊说法，不足以填写 due_at。
+   如果原文只给出日期、没有具体时刻，按该日期 18:00 处理，不要填 00:00。
 3. completion_criteria 只有在原文明确说明“做到什么程度算完成”时才填写，否则填 null。
 4. priority 只能填 P0/P1/P2/P3：
    - P0：今天必须处理，或原文明确是紧急且重要
@@ -198,6 +199,7 @@ def _build_intake_follow_up_prompt(*, draft_title: str, source_text: str) -> str
 1. 只有当新消息主要是在补充上一条草稿的字段时，is_follow_up 才能填 true。
 2. 如果新消息本身更像一条新任务，或和已有草稿关系不明确，is_follow_up 必须填 false。
 3. due_at 只有在新消息能明确推出时才填写，使用 ISO 8601；无法确定就填 null。
+   如果新消息只给出日期、没有具体时刻，按该日期 18:00 处理，不要填 00:00。
 4. completion_criteria 只有在新消息明确说明“做到什么程度算完成”时才填写，否则填 null。
 5. confidence 表示你对“这是补充消息”的判断把握，0 到 1。
 6. 不要补造截止时间或完成标准。

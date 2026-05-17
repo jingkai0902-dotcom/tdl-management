@@ -160,6 +160,62 @@ async def test_intake_blocks_auto_create_when_message_mentions_other_manager() -
 
 
 @pytest.mark.asyncio
+async def test_intake_defaults_to_sender_when_other_manager_is_only_collaborator() -> None:
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-collaborator",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="下周一和李珍聊一下招生复盘",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="与李珍沟通招生复盘",
+                owner_id=None,
+                due_at=datetime(2026, 5, 18, 0, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.95,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert card.status == "draft"
+    assert "负责人：荆少巍 / Frank" in card.body
+    assert "截止：2026-05-18 18:00" in card.body
+
+
+@pytest.mark.asyncio
+async def test_intake_normalizes_date_only_due_at_to_end_of_workday() -> None:
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-date-only",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="请时颖下周三前提交直播复盘，完成标准是形成一页结论",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="提交直播复盘",
+                owner_id="0962151633-1819579479",
+                due_at=datetime(2026, 5, 20, 0, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria="形成一页结论",
+                priority="P1",
+                confidence=0.95,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "截止：2026-05-20 18:00" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_keeps_missing_due_date_as_draft() -> None:
     session = FakeSession()
     card = await intake_dingtalk_message(
@@ -286,3 +342,73 @@ async def test_intake_updates_latest_draft_from_text_follow_up(monkeypatch) -> N
     assert card.title == "TDL 草稿"
     assert "2026-05-16 16:00" in card.body[2]
     assert "举几个简单例子并教会基础操作" in card.body[4]
+
+
+@pytest.mark.asyncio
+async def test_intake_normalizes_date_only_follow_up_to_end_of_workday(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="复盘试听课转化",
+        owner_id="0617564550-1513038363",
+        due_at=None,
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.due_at = payload.due_at
+        draft.completion_criteria = payload.completion_criteria
+        return draft
+
+    class FollowUpAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=datetime(2026, 5, 18, 0, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria="形成一页结论",
+                confidence=0.95,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-date-follow-up",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="下周一前完成，完成标准是形成一页结论",
+        ),
+        FollowUpAIClient(
+            TDLFieldDraft(
+                title="新任务不该被创建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "2026-05-18 18:00" in card.body[2]

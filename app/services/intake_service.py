@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime
 import re
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +80,11 @@ def _has_explicit_due_reference(source_text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
+def _has_explicit_time_reference(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    return bool(re.search(r"\d{1,2}(?::\d{2})?(?:点|时)", normalized))
+
+
 def _drop_unsupported_due_at(
     extracted: TDLFieldDraft,
     *,
@@ -87,6 +93,22 @@ def _drop_unsupported_due_at(
     if extracted.due_at is None or _has_explicit_due_reference(source_text):
         return extracted
     return replace(extracted, due_at=None)
+
+
+def _normalize_date_only_due_at(
+    due_at: datetime | None,
+    *,
+    source_text: str,
+) -> datetime | None:
+    if (
+        due_at is None
+        or not _has_explicit_due_reference(source_text)
+        or _has_explicit_time_reference(source_text)
+    ):
+        return due_at
+    if any((due_at.hour, due_at.minute, due_at.second, due_at.microsecond)):
+        return due_at
+    return due_at.replace(hour=18)
 
 
 async def intake_dingtalk_message(
@@ -116,7 +138,14 @@ async def intake_dingtalk_message(
             >= float(follow_up_rules.get("minimum_confidence", 0.80))
         ):
             updates = TDLDraftUpdate(
-                due_at=follow_up.due_at if latest_draft.due_at is None else None,
+                due_at=(
+                    _normalize_date_only_due_at(
+                        follow_up.due_at,
+                        source_text=message.content,
+                    )
+                    if latest_draft.due_at is None
+                    else None
+                ),
                 completion_criteria=(
                     follow_up.completion_criteria
                     if latest_draft.completion_criteria is None
@@ -144,6 +173,13 @@ async def intake_dingtalk_message(
             confidence=0.0,
         )
     extracted = _drop_unsupported_due_at(extracted, source_text=message.content)
+    extracted = replace(
+        extracted,
+        due_at=_normalize_date_only_due_at(
+            extracted.due_at,
+            source_text=message.content,
+        ),
+    )
     mentioned_other_ids = _mentioned_other_management_ids(
         message.content,
         sender_id=message.sender_id,
@@ -152,9 +188,7 @@ async def intake_dingtalk_message(
         message.content,
         sender_id=message.sender_id,
     )
-    owner_id = extracted.owner_id or inferred_owner_id
-    if owner_id is None and not mentioned_other_ids:
-        owner_id = message.sender_id
+    owner_id = extracted.owner_id or inferred_owner_id or message.sender_id
     payload = TDLDraftCreate(
         title=extracted.title,
         owner_id=owner_id,
