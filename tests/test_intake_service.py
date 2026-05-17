@@ -413,6 +413,104 @@ async def test_intake_skips_follow_up_ai_for_obvious_new_cross_person_task(monke
 
 
 @pytest.mark.asyncio
+async def test_intake_updates_owner_from_correction_even_when_message_mentions_manager(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id=None,
+        due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.owner_id = payload.owner_id
+        draft.due_at = payload.due_at or draft.due_at
+        draft.completion_criteria = payload.completion_criteria
+        return draft
+
+    class CorrectionAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=None,
+                completion_criteria=None,
+                confidence=0.93,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-owner",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才打错字了，是李祯，珍珠的珍",
+        ),
+        CorrectionAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "负责人：李珍 / Helen" in card.body
+
+
+@pytest.mark.asyncio
+async def test_intake_fuzzy_matches_assigned_owner_from_voice_transcript() -> None:
+    session = FakeSession()
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-fuzzy-owner",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="请李祯下周三前提交续费复盘",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="提交续费复盘",
+                owner_id=None,
+                due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                priority="P1",
+                confidence=0.92,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "负责人：李珍 / Helen" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_normalizes_date_only_follow_up_to_end_of_workday(monkeypatch) -> None:
     session = FakeSession()
     draft = TDL(

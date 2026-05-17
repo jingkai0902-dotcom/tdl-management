@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, ValidationError
 
 from app.config import get_settings, load_yaml_config
+from app.roster import resolve_management_user_id, roster_name_to_user_id
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
@@ -56,6 +57,7 @@ class TDLFollowUpDraft:
     due_at: datetime | None
     completion_criteria: str | None
     confidence: float
+    owner_id: str | None = None
 
 
 class ExtractedDecision(BaseModel):
@@ -81,6 +83,7 @@ class ExtractedTDL(BaseModel):
 
 class ExtractedTDLFollowUp(BaseModel):
     is_follow_up: bool
+    owner_name: str | None = None
     due_at: datetime | None = None
     completion_criteria: str | None = None
     confidence: float = Field(ge=0.0, le=1.0)
@@ -103,17 +106,7 @@ def _normalize_due_at(value: datetime | None) -> datetime | None:
 
 
 def _roster_name_to_user_id() -> dict[str, str]:
-    roster = load_yaml_config("management_roster.yaml")
-    mapping: dict[str, str] = {}
-    for member in roster.get("management", []):
-        user_id = member.get("dingtalk_user_id")
-        if not user_id:
-            continue
-        for key in ("name", "english_name"):
-            value = member.get(key)
-            if value:
-                mapping[str(value)] = str(user_id)
-    return mapping
+    return roster_name_to_user_id()
 
 
 def _roster_prompt_lines() -> str:
@@ -201,9 +194,13 @@ def _build_intake_follow_up_prompt(*, draft_title: str, source_text: str) -> str
 3. due_at 只有在新消息能明确推出时才填写，使用 ISO 8601；无法确定就填 null。
    如果新消息只给出日期、没有具体时刻，按该日期 18:00 处理，不要填 00:00。
 4. completion_criteria 只有在新消息明确说明“做到什么程度算完成”时才填写，否则填 null。
-5. confidence 表示你对“这是补充消息”的判断把握，0 到 1。
-6. 不要补造截止时间或完成标准。
-7. 请只输出 JSON 对象，不要附加解释。
+5. owner_name 只有在新消息明确是在修正或补充这条草稿的负责人时才填写，否则填 null。
+   例如“刚才打错字了，是李珍”“负责人改成 Helen”属于补充负责人。
+6. “刚才说错了 / 打错字了 / 不是 X 是 Y / 改成 Y / 是 Y”通常是对上一条草稿的纠正；
+   如果没有新的可执行动作，不要把它当作新任务。
+7. confidence 表示你对“这是补充消息”的判断把握，0 到 1。
+8. 不要补造负责人、截止时间或完成标准。
+9. 请只输出 JSON 对象，不要附加解释。
 
 用户新消息：
 {source_text}
@@ -239,7 +236,8 @@ def _to_decision_drafts(items: Iterable[ExtractedDecision]) -> list[DecisionDraf
     return [
         DecisionDraft(
             title=item.title,
-            owner_id=name_to_id.get(item.owner_name or ""),
+            owner_id=name_to_id.get(item.owner_name or "")
+            or resolve_management_user_id(item.owner_name),
             completion_criteria=item.completion_criteria,
             tdl_title=item.tdl_title,
             due_at=_normalize_due_at(item.due_at),
@@ -251,7 +249,8 @@ def _to_decision_drafts(items: Iterable[ExtractedDecision]) -> list[DecisionDraf
 def _to_tdl_field_draft(item: ExtractedTDL) -> TDLFieldDraft:
     return TDLFieldDraft(
         title=item.title,
-        owner_id=_roster_name_to_user_id().get(item.owner_name or ""),
+        owner_id=_roster_name_to_user_id().get(item.owner_name or "")
+        or resolve_management_user_id(item.owner_name),
         due_at=_normalize_due_at(item.due_at),
         completion_criteria=item.completion_criteria,
         priority=item.priority,
@@ -262,6 +261,8 @@ def _to_tdl_field_draft(item: ExtractedTDL) -> TDLFieldDraft:
 def _to_tdl_follow_up_draft(item: ExtractedTDLFollowUp) -> TDLFollowUpDraft:
     return TDLFollowUpDraft(
         is_follow_up=item.is_follow_up,
+        owner_id=_roster_name_to_user_id().get(item.owner_name or "")
+        or resolve_management_user_id(item.owner_name),
         due_at=_normalize_due_at(item.due_at),
         completion_criteria=item.completion_criteria,
         confidence=item.confidence,
@@ -428,6 +429,7 @@ class PlaceholderAIClient:
     ) -> TDLFollowUpDraft:
         return TDLFollowUpDraft(
             is_follow_up=False,
+            owner_id=None,
             due_at=None,
             completion_criteria=None,
             confidence=0.0,

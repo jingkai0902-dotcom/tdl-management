@@ -37,6 +37,32 @@ async def test_handle_tdl_card_callback_routes_complete(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_treats_repeated_cancel_as_handled(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    class SessionWithCanceledTDL:
+        async def get(self, model, incoming_tdl_id):
+            assert incoming_tdl_id == tdl_id
+            return SimpleNamespace(tdl_id=tdl_id, status="canceled")
+
+    async def fake_cancel_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("Only draft TDLs can be canceled through draft intake")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "cancel", fake_cancel_tdl)
+
+    result = await handle_tdl_card_callback(
+        SessionWithCanceledTDL(),
+        action_id=build_card_action_id("cancel", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "cancel"
+    assert result.status == "canceled"
+    assert "已处理" in result.response_text
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() -> None:
     tdl_id = uuid4()
 

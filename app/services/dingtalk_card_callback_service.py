@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import load_yaml_config
 from app.integrations.dingtalk_card import parse_card_action_id
+from app.models import TDL
 from app.schemas import (
     TDLCardCriteriaSubmission,
     TDLCardOwnerSubmission,
@@ -40,6 +41,13 @@ ONE_CLICK_ACTIONS = {
     "complete": complete_tdl,
     "need_help": request_help_tdl,
     "cancel": cancel_draft_tdl,
+}
+
+IDEMPOTENT_ACTION_STATUSES = {
+    "confirm": {"active", "attention", "snoozed", "done"},
+    "complete": {"done"},
+    "need_help": {"attention"},
+    "cancel": {"canceled"},
 }
 
 FOLLOW_UP_ACTIONS = {
@@ -219,13 +227,25 @@ async def handle_tdl_card_callback(
             required_fields=required_fields,
         )
 
-    tdl = await handler(session, tdl_id, actor_id)
     feedback = {
         "confirm": "TDL 已创建",
         "complete": "已完成",
         "need_help": "已标记为需要协助",
         "cancel": "已忽略草稿",
     }.get(action, f"操作完成：{action}")
+    try:
+        tdl = await handler(session, tdl_id, actor_id)
+    except ValueError:
+        existing = await _get_existing_tdl(session, tdl_id)
+        if existing is None or existing.status not in IDEMPOTENT_ACTION_STATUSES.get(action, set()):
+            raise
+        return CardCallbackResult(
+            handled=True,
+            action=action,
+            tdl_id=str(existing.tdl_id),
+            status=existing.status,
+            response_text=f"{feedback}（已处理）",
+        )
     return CardCallbackResult(
         handled=True,
         action=action,
@@ -233,3 +253,10 @@ async def handle_tdl_card_callback(
         status=tdl.status,
         response_text=feedback,
     )
+
+
+async def _get_existing_tdl(session: AsyncSession, tdl_id) -> TDL | None:
+    getter = getattr(session, "get", None)
+    if getter is None:
+        return None
+    return await getter(TDL, tdl_id)

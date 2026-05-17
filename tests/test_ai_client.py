@@ -4,10 +4,14 @@ from types import SimpleNamespace
 
 from app.integrations.ai_client import (
     ExtractedDecision,
+    ExtractedTDL,
+    ExtractedTDLFollowUp,
     MeetingExtractionError,
     PlaceholderAIClient,
     ProviderAIClient,
     _to_decision_drafts,
+    _to_tdl_field_draft,
+    _to_tdl_follow_up_draft,
 )
 
 
@@ -37,6 +41,35 @@ def test_to_decision_drafts_resolves_known_owner() -> None:
     assert drafts[0].owner_id == "0962151633-1819579479"
     assert drafts[0].due_at is not None
     assert drafts[0].due_at.tzinfo is not None
+
+
+def test_tdl_field_draft_fuzzy_resolves_voice_transcribed_owner_name() -> None:
+    draft = _to_tdl_field_draft(
+        ExtractedTDL(
+            title="提交续费复盘",
+            owner_name="李祯",
+            due_at=None,
+            completion_criteria=None,
+            priority="P1",
+            confidence=0.9,
+        )
+    )
+
+    assert draft.owner_id == "0611436746849471"
+
+
+def test_tdl_follow_up_draft_resolves_corrected_owner_name() -> None:
+    draft = _to_tdl_follow_up_draft(
+        ExtractedTDLFollowUp(
+            is_follow_up=True,
+            owner_name="时颍",
+            due_at=None,
+            completion_criteria=None,
+            confidence=0.9,
+        )
+    )
+
+    assert draft.owner_id == "0962151633-1819579479"
 
 
 class FakeResponsesAPI:
