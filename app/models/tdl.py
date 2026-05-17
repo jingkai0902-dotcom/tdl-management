@@ -24,6 +24,7 @@ class TDL(Base):
     snooze_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     status: Mapped[str] = mapped_column(String(32), default="draft")
+    cancel_reason: Mapped[str | None] = mapped_column(String(255))
     priority: Mapped[str] = mapped_column(String(16), default="P2")
     business_line: Mapped[str | None] = mapped_column(String(64))
     function_domain: Mapped[str | None] = mapped_column(String(64))

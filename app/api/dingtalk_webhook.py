@@ -11,6 +11,7 @@ from app.schemas import (
     TDLPostponeAction,
     TDLSnoozeAction,
     TDLDraftUpdate,
+    TDLRejectAction,
 )
 from app.services.intake_service import intake_dingtalk_message
 from app.services.calendar_service import (
@@ -20,6 +21,7 @@ from app.services.calendar_service import (
 )
 from app.services.tdl_service import (
     complete_tdl,
+    reject_tdl,
     request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
@@ -117,6 +119,29 @@ async def need_help_action(
     except ValueError as exc:
         detail = str(exc)
         status_code = 409 if "lifecycle actions" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/actions/reject")
+async def reject_action(
+    payload: TDLRejectAction,
+    session: AsyncSession = Depends(get_session),
+):
+    if payload.action != "reject":
+        raise HTTPException(status_code=400, detail="Unsupported action")
+    try:
+        return await reject_tdl(
+            session,
+            payload.tdl_id,
+            payload.actor_id,
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if "current owner" in detail or "lifecycle actions" in detail:
+            status_code = 409
+        else:
+            status_code = 404
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
 

@@ -12,6 +12,7 @@ from app.services.tdl_service import (
     confirm_tdl,
     postpone_tdl,
     request_help_tdl,
+    reject_tdl,
     is_follow_up_candidate,
     snooze_tdl,
     update_draft_tdl,
@@ -81,6 +82,21 @@ def test_tdl_read_next_actions_follow_missing_fields() -> None:
     assert complete.recommended_actions == ["set_completion_criteria"]
 
 
+def test_tdl_read_hides_draft_actions_after_lifecycle_exit() -> None:
+    from app.schemas import TDLRead
+
+    rejected = _active_tdl()
+    rejected.status = "rejected"
+    rejected.cancel_reason = "owner_rejected"
+
+    result = TDLRead.from_tdl(rejected)
+
+    assert result.status == "rejected"
+    assert result.cancel_reason == "owner_rejected"
+    assert result.next_actions == []
+    assert result.recommended_actions == []
+
+
 def test_is_follow_up_candidate_rejects_stale_drafts() -> None:
     now = datetime(2026, 5, 16, 12, 0, tzinfo=UTC)
     fresh = _draft_tdl(owner_id="0617564550-1513038363")
@@ -111,6 +127,8 @@ async def test_cancel_draft_tdl_marks_draft_canceled() -> None:
     canceled = await cancel_draft_tdl(session, tdl.tdl_id, "0617564550-1513038363")
 
     assert canceled.status == "canceled"
+    assert canceled.cancel_reason == "draft_ignored"
+    assert session.items[-1].payload == {"reason": "draft_ignored"}
 
 
 @pytest.mark.asyncio
@@ -236,6 +254,35 @@ async def test_request_help_marks_attention_and_writes_audit() -> None:
 
     assert requested.status == "attention"
     assert session.items[-1].action == "need_help"
+
+
+@pytest.mark.asyncio
+async def test_reject_tdl_marks_rejected_with_reason() -> None:
+    tdl = _active_tdl()
+    session = FakeSession(tdl)
+
+    rejected = await reject_tdl(
+        session,
+        tdl.tdl_id,
+        "0617564550-1513038363",
+        reason="not_my_task",
+    )
+
+    assert rejected.status == "rejected"
+    assert rejected.cancel_reason == "not_my_task"
+    assert session.items[-1].action == "reject"
+    assert session.items[-1].payload == {"reason": "not_my_task"}
+
+
+@pytest.mark.asyncio
+async def test_reject_tdl_requires_current_owner() -> None:
+    tdl = _active_tdl()
+    session = FakeSession(tdl)
+
+    with pytest.raises(ValueError, match="current owner"):
+        await reject_tdl(session, tdl.tdl_id, "other-user")
+
+    assert tdl.status == "active"
 
 
 @pytest.mark.asyncio

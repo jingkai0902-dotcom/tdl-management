@@ -63,6 +63,56 @@ async def test_handle_tdl_card_callback_treats_repeated_cancel_as_handled(monkey
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_routes_reject(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_reject_tdl(session, incoming_tdl_id, actor_id):
+        assert session == "session"
+        assert incoming_tdl_id == tdl_id
+        assert actor_id == "user-1"
+        return SimpleNamespace(tdl_id=tdl_id, status="rejected")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "reject", fake_reject_tdl)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("reject", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "reject"
+    assert result.status == "rejected"
+    assert result.response_text == "已标记为不是我的任务"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_treats_repeated_reject_as_handled(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    class SessionWithRejectedTDL:
+        async def get(self, model, incoming_tdl_id):
+            assert incoming_tdl_id == tdl_id
+            return SimpleNamespace(tdl_id=tdl_id, status="rejected")
+
+    async def fake_reject_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("Only open TDLs can receive lifecycle actions")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "reject", fake_reject_tdl)
+
+    result = await handle_tdl_card_callback(
+        SessionWithRejectedTDL(),
+        action_id=build_card_action_id("reject", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "reject"
+    assert result.status == "rejected"
+    assert "已处理" in result.response_text
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() -> None:
     tdl_id = uuid4()
 

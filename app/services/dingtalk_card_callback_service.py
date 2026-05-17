@@ -16,6 +16,7 @@ from app.schemas import (
 from app.services.tdl_service import (
     cancel_draft_tdl,
     complete_tdl,
+    reject_tdl,
     request_help_tdl,
     snooze_tdl,
     update_draft_tdl,
@@ -40,6 +41,7 @@ ONE_CLICK_ACTIONS = {
     "confirm": confirm_tdl_with_calendar,
     "complete": complete_tdl,
     "need_help": request_help_tdl,
+    "reject": reject_tdl,
     "cancel": cancel_draft_tdl,
 }
 
@@ -47,6 +49,7 @@ IDEMPOTENT_ACTION_STATUSES = {
     "confirm": {"active", "attention", "snoozed", "done"},
     "complete": {"done"},
     "need_help": {"attention"},
+    "reject": {"rejected"},
     "cancel": {"canceled"},
 }
 
@@ -231,6 +234,7 @@ async def handle_tdl_card_callback(
         "confirm": "TDL 已创建",
         "complete": "已完成",
         "need_help": "已标记为需要协助",
+        "reject": "已标记为不是我的任务",
         "cancel": "已忽略草稿",
     }.get(action, f"操作完成：{action}")
     try:
