@@ -41,11 +41,14 @@ class TDLChatbotHandler(ChatbotHandler):
         incoming = callback.data
         message = ChatbotMessage.from_dict(incoming) if isinstance(incoming, dict) else incoming
         content = _extract_message_content(message)
+        # 语音消息：钉钉已自带语音识别，直接从 recognition 字段取文字
+        if not content and isinstance(incoming, dict) and incoming.get("msgtype") == "audio":
+            content = (incoming.get("content", {}) or {}).get("recognition", "")
         sender_id = getattr(message, "sender_staff_id", "") or getattr(message, "sender_id", "")
         if not sender_id:
             return AckMessage.STATUS_OK, "OK"
         if not content:
-            self.reply_text("当前先支持文字录入，语音和图片会在后续版本接入。", message)
+            self.reply_text("未能识别语音内容，请尝试用文字描述。", message)
             return AckMessage.STATUS_OK, "OK"
 
         payload = DingTalkIncomingMessage(

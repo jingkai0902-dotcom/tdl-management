@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-5.5"
+    openai_base_url: str = ""
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-v4-pro"
 

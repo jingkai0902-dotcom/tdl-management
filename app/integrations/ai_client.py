@@ -231,6 +231,13 @@ def _tdl_follow_up_json_schema() -> dict[str, Any]:
     }
 
 
+def _openai_client_kwargs(settings) -> dict[str, str]:
+    kwargs = {"api_key": settings.openai_api_key}
+    if settings.openai_base_url:
+        kwargs["base_url"] = settings.openai_base_url
+    return kwargs
+
+
 def _to_decision_drafts(items: Iterable[ExtractedDecision]) -> list[DecisionDraft]:
     name_to_id = _roster_name_to_user_id()
     return [
@@ -280,7 +287,7 @@ class ProviderAIClient:
         settings = get_settings()
         self.openai_model = settings.openai_model
         self.deepseek_model = settings.deepseek_model
-        self.openai_client = openai_client or AsyncOpenAI(api_key=settings.openai_api_key)
+        self.openai_client = openai_client or AsyncOpenAI(**_openai_client_kwargs(settings))
         self.deepseek_client = deepseek_client or AsyncOpenAI(
             api_key=settings.deepseek_api_key,
             base_url="https://api.deepseek.com",
