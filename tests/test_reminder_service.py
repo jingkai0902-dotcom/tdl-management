@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from app.models import AuditLog, TDL
+from app.integrations.dingtalk_client import DingTalkAPIError
 from app.services.reminder_service import (
     build_reminder_candidates,
     build_sendable_reminder_cards,
@@ -371,6 +372,33 @@ async def test_send_reminder_dispatches_uses_interactive_cards_when_configured()
     assert client.interactive_cards[0]["user_id"] == "owner-1"
     assert client.interactive_cards[0]["card_template_id"] == "template.schema"
     assert client.interactive_cards[0]["card_data"]["msgTitle"] == "今日待办"
+
+
+@pytest.mark.asyncio
+async def test_send_reminder_dispatches_can_require_interactive_cards() -> None:
+    due_today = _tdl(
+        due_at=datetime(2026, 5, 18, 18, 0, tzinfo=UTC),
+        owner_id="owner-1",
+    )
+    dispatches = build_sendable_reminder_cards(
+        [due_today],
+        build_reminder_candidates(
+            [due_today],
+            as_of=datetime(2026, 5, 18, 8, 30, tzinfo=UTC),
+            policy={},
+        ),
+    )
+    client = FakeDingTalkClient()
+
+    with pytest.raises(DingTalkAPIError, match="interactive reminder cards are required"):
+        await send_reminder_dispatches(
+            client,
+            dispatches,
+            require_interactive_cards=True,
+        )
+
+    assert client.messages == []
+    assert client.interactive_cards == []
 
 
 def test_count_yesterday_completions_uses_previous_calendar_day() -> None:
