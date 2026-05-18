@@ -87,6 +87,50 @@ async def test_chatbot_handler_accepts_audio_recognition_as_text(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+async def test_chatbot_handler_routes_text_action_before_intake(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_handle_text_action_command(session, *, actor_id, source_text):
+        seen["text_action"] = (session, actor_id, source_text)
+        return SimpleNamespace(title="已标记完成", status="done", buttons=[])
+
+    async def fake_intake(*args, **kwargs):
+        raise AssertionError("text action commands must not enter intake")
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_text_action_command",
+        fake_handle_text_action_command,
+    )
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: {"card": "rendered"},
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_card",
+        lambda self, card_data, message: seen.setdefault("reply_card", card_data) or "card-id",
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "text": {"content": "完成：整理续费复盘"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen["text_action"] == ("session", "user-1", "完成：整理续费复盘")
+    assert seen["reply_card"] == {"card": "rendered"}
+
+
+@pytest.mark.asyncio
 async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
     seen = {}
 
@@ -155,7 +199,7 @@ async def test_chatbot_handler_falls_back_to_markdown_when_card_send_fails(monke
     )
     monkeypatch.setattr(
         "app.integrations.dingtalk_stream_bot.render_markdown",
-        lambda card: "rendered markdown",
+        lambda card, **kwargs: "rendered markdown",
     )
     monkeypatch.setattr(TDLChatbotHandler, "reply_card", lambda self, card_data, message: "")
     monkeypatch.setattr(

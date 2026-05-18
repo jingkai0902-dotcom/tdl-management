@@ -14,6 +14,7 @@ from app.integrations.dingtalk_card import render_markdown, render_standard_card
 from app.schemas import DingTalkIncomingMessage
 from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
 from app.services.intake_service import intake_dingtalk_message
+from app.services.text_action_service import handle_text_action_command
 
 
 logger = logging.getLogger(__name__)
@@ -58,14 +59,20 @@ class TDLChatbotHandler(ChatbotHandler):
             content=content.strip(),
         )
         async with SessionLocal() as session:
-            card = await intake_dingtalk_message(session, payload)
+            card = await handle_text_action_command(
+                session,
+                actor_id=payload.sender_id,
+                source_text=payload.content,
+            )
+            if card is None:
+                card = await intake_dingtalk_message(session, payload)
         card_data = render_standard_card_data(
             card,
             include_actions=False,
             extra_body_lines=_chatbot_card_footer_lines(card),
         )
         if not self.reply_card(card_data, message):
-            self.reply_markdown(card.title, render_markdown(card), message)
+            self.reply_markdown(card.title, render_markdown(card, include_actions=False), message)
         return AckMessage.STATUS_OK, "OK"
 
 
