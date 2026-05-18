@@ -1,0 +1,60 @@
+graph TB
+    subgraph 立项["一 · 立项与定位"]
+        A1["🎯 项目启动<br/>李珍9个卡点→系统需求"] --> A2["📐 GTD五步流程<br/>→ 五模块架构"]
+        A2 --> A3["🏗️ 数据模型设计<br/>meeting→decision→tdl"]
+    end
+
+    subgraph 设计["二 · 设计阶段方法论引入"]
+        B1["GTD<br/>David Allen"] --> B4["🧠 核心引擎<br/>五模块+标签词典"]
+        B2["企业AI转型框架<br/>三步走"] --> B4
+        B3["双MVP验证策略<br/>月会+薪资对照"] --> B4
+    end
+
+    subgraph 反思["三 · 架构反思与校准"]
+        C1["🤔 质疑线性开发<br/>《天道》农户模式启发"] --> C2["📋 11号文档<br/>模块化架构方案"]
+        C2 --> C3["🔍 MECE审视<br/>10问题→3真问题"]
+        C3 --> C4["📋 12号文档<br/>商业/体验/技术三维"]
+    end
+
+    subgraph 方法["四 · 补充方法论"]
+        D1["MECE原则<br/>Barbara Minto"] --> D3["⚙️ 结构检验工具"]
+        D2["集装箱三层论<br/>任务→组织→生态位"] --> D3
+    end
+
+    subgraph 开发["五 · 开发与部署"]
+        E1["💻 Codex 主开发<br/>批次1→2→3"] --> E2["🔍 Claude PR审核<br/>SOP 10号文档"]
+        E2 --> E3["🚀 ECS部署<br/>144测试 7场景"]
+    end
+
+    subgraph 故障["六 · Codex故障·Cowork接手"]
+        F1["⚠️ Codex额度耗尽"] --> F2["🛠️ Cowork接手4天<br/>PR #42-47"]
+        F2 --> F3["🔧 日历OAuth修复<br/>卡片交互修复"]
+        F3 --> F4["✅ 测试144通过<br/>7场景全绿"]
+    end
+
+    subgraph 试点["七 · 试点验证"]
+        G1["🧪 日常TDL助手<br/>Frank+李珍试用"] --> G3["📊 当前状态<br/>可控试点阶段"]
+        G2["🧪 会议录入评测<br/>召回率31%→不进入"] --> G3
+    end
+
+    subgraph 未来["八 · 待推进"]
+        H1["🔜 下个PR<br/>委派/已拒绝/cancel_reason"] --> H3["🎯 第七节后<br/>持续演进"]
+        H2["🔜 第2阶段<br/>6个插件体系"] --> H3
+    end
+
+    立项 --> 设计
+    设计 --> 反思
+    反思 --> 方法
+    方法 --> 开发
+    开发 --> 故障
+    故障 --> 试点
+    试点 --> 未来
+
+    style A1 fill:#1a1a2e,stroke:#e94560,color:#fff
+    style B4 fill:#1a1a2e,stroke:#0f3460,color:#fff
+    style C2 fill:#1a1a2e,stroke:#533483,color:#fff
+    style C4 fill:#1a1a2e,stroke:#533483,color:#fff
+    style E3 fill:#1a1a2e,stroke:#0f3460,color:#fff
+    style F3 fill:#1a1a2e,stroke:#e94560,color:#fff
+    style G3 fill:#1a1a2e,stroke:#f5a623,color:#fff
+    style H3 fill:#1a1a2e,stroke:#00b4d8,color:#fff
