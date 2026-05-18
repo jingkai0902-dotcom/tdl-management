@@ -173,10 +173,10 @@ def build_reminder_card(
     raise ValueError(f"Unsupported reminder action: {action}")
 
 
-def render_markdown(card: TDLCard) -> str:
+def render_markdown(card: TDLCard, *, include_actions: bool = True) -> str:
     lines = [f"## {card.title}", ""]
     lines.extend(card.body)
-    if card.buttons:
+    if include_actions and card.buttons:
         lines.extend(["", "操作："])
         lines.extend(f"- {button.label}" for button in card.buttons)
     return "\n".join(lines)

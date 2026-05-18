@@ -56,6 +56,15 @@ def test_created_card_renders_markdown() -> None:
     assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
 
 
+def test_render_markdown_can_hide_non_clickable_actions() -> None:
+    card = build_created_card(StubTDL("active"))
+
+    result = render_markdown(card, include_actions=False)
+
+    assert "操作：" not in result
+    assert "标记完成" not in result
+
+
 def test_card_formats_aware_due_at_in_shanghai_time() -> None:
     card = build_created_card(
         StubTDL("active", due_at=datetime(2026, 5, 15, 16, 0, tzinfo=UTC))
