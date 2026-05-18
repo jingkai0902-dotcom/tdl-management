@@ -98,6 +98,13 @@ git pull
 bash deploy/deploy.sh
 ```
 
+本地协作时，优先使用仓库内的确定性脚本，避免重复手拼命令：
+
+```bash
+bash scripts/tdl-prod-check.sh
+bash scripts/tdl-deploy-prod.sh
+```
+
 ## Smoke Test
 
 ```bash
