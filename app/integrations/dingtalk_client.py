@@ -160,6 +160,79 @@ class DingTalkClient:
             raise DingTalkAPIError(f"Failed to update DingTalk calendar event: {payload}")
         return event_id
 
+    async def create_work_todo_task(
+        self,
+        *,
+        owner_union_id: str,
+        title: str,
+        detail_url: str,
+        operator_id: str | None = None,
+        creator_id: str | None = None,
+        description: str | None = None,
+        due_at: datetime | None = None,
+        participant_ids: list[str] | None = None,
+        source_id: str | None = None,
+        priority: int | None = None,
+        ding_notify: str | None = None,
+    ) -> str:
+        """Create an enterprise work todo with app-level credentials."""
+        if not detail_url.strip():
+            raise DingTalkAPIError("DingTalk work todo requires detail_url")
+        token = await self._get_openapi_access_token()
+        resolved_operator_id = operator_id or owner_union_id
+        response = await self.http_client.post(
+            f"{OPENAPI_BASE_URL}/v1.0/todo/users/{owner_union_id}/tasks",
+            params={"operatorId": resolved_operator_id},
+            headers={"x-acs-dingtalk-access-token": token},
+            json=self._work_todo_request_body(
+                owner_union_id=owner_union_id,
+                title=title,
+                detail_url=detail_url,
+                creator_id=creator_id or resolved_operator_id,
+                description=description,
+                due_at=due_at,
+                participant_ids=participant_ids,
+                source_id=source_id,
+                priority=priority,
+                ding_notify=ding_notify,
+            ),
+        )
+        payload = response.json()
+        task_id = self._extract_todo_task_id(payload)
+        if response.status_code >= 400 or payload.get("code") or not task_id:
+            raise DingTalkAPIError(f"Failed to create DingTalk work todo task: {payload}")
+        return task_id
+
+    async def create_personal_todo_task(
+        self,
+        *,
+        user_access_token: str,
+        title: str,
+        description: str | None = None,
+        due_at: datetime | None = None,
+        executor_ids: list[str] | None = None,
+        participant_ids: list[str] | None = None,
+        ding_notify: str | None = None,
+    ) -> str:
+        """Create a personal todo with the caller's user OAuth token."""
+        response = await self.http_client.post(
+            f"{OPENAPI_BASE_URL}/v1.0/todo/users/me/personalTasks",
+            headers={"x-acs-dingtalk-access-token": user_access_token},
+            json=self._personal_todo_request_body(
+                title=title,
+                description=description,
+                due_at=due_at,
+                executor_ids=executor_ids,
+                participant_ids=participant_ids,
+                ding_notify=ding_notify,
+            ),
+        )
+        payload = response.json()
+        task_id = self._extract_todo_task_id(payload)
+        if response.status_code >= 400 or payload.get("code") or not task_id:
+            raise DingTalkAPIError(f"Failed to create DingTalk personal todo task: {payload}")
+        return task_id
+
     def _calendar_event_request_body(
         self,
         *,
@@ -191,6 +264,79 @@ class DingTalkClient:
             ],
         }
         return body
+
+    def _work_todo_request_body(
+        self,
+        *,
+        owner_union_id: str,
+        title: str,
+        detail_url: str,
+        creator_id: str,
+        description: str | None = None,
+        due_at: datetime | None = None,
+        participant_ids: list[str] | None = None,
+        source_id: str | None = None,
+        priority: int | None = None,
+        ding_notify: str | None = None,
+    ) -> dict:
+        body = {
+            "subject": title,
+            "creatorId": creator_id,
+            "description": description or "",
+            "executorIds": [owner_union_id],
+            "participantIds": participant_ids or [],
+            "detailUrl": {
+                "appUrl": detail_url,
+                "pcUrl": detail_url,
+            },
+        }
+        if due_at is not None:
+            body["dueTime"] = self._to_unix_millis(due_at)
+        if source_id:
+            body["sourceId"] = source_id
+        if priority is not None:
+            body["priority"] = priority
+        if ding_notify is not None:
+            body["notifyConfigs"] = {"dingNotify": ding_notify}
+        return body
+
+    def _personal_todo_request_body(
+        self,
+        *,
+        title: str,
+        description: str | None = None,
+        due_at: datetime | None = None,
+        executor_ids: list[str] | None = None,
+        participant_ids: list[str] | None = None,
+        ding_notify: str | None = None,
+    ) -> dict:
+        body = {
+            "subject": title,
+            "description": description or "",
+            "executorIds": executor_ids or [],
+            "participantIds": participant_ids or [],
+        }
+        if due_at is not None:
+            body["dueTime"] = self._to_unix_millis(due_at)
+        if ding_notify is not None:
+            body["notifyConfigs"] = {"dingNotify": ding_notify}
+        return body
+
+    def _extract_todo_task_id(self, payload: dict) -> str | None:
+        task_id = payload.get("taskId") or payload.get("id")
+        if task_id:
+            return str(task_id)
+        result = payload.get("result")
+        if isinstance(result, dict):
+            task_id = result.get("taskId") or result.get("id")
+            if task_id:
+                return str(task_id)
+        return None
+
+    def _to_unix_millis(self, value: datetime) -> int:
+        if value.tzinfo is None:
+            raise DingTalkAPIError("DingTalk todo due_at must include timezone information")
+        return int(value.timestamp() * 1000)
 
     def build_user_authorization_url(self, *, redirect_uri: str, state: str) -> str:
         settings = get_settings()

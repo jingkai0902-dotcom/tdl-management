@@ -197,6 +197,228 @@ async def test_update_tdl_calendar_event_uses_existing_event_id_with_openapi_tok
 
 
 @pytest.mark.asyncio
+async def test_create_work_todo_task_uses_openapi_token_and_detail_url() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
+        return httpx.Response(200, json={"id": "todo-1"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        task_id = await client.create_work_todo_task(
+            owner_union_id="union-owner",
+            operator_id="union-operator",
+            title="跟进家长回访",
+            description="TDL ID: tdl-1",
+            detail_url="https://tdl.example.com/tasks/tdl-1",
+            due_at=datetime(2026, 5, 20, 10, 30, tzinfo=UTC),
+            participant_ids=["union-leader"],
+            source_id="tdl-1",
+        )
+
+    assert task_id == "todo-1"
+    assert [request.url.path for request in requests] == [
+        "/v1.0/oauth2/accessToken",
+        "/v1.0/todo/users/union-owner/tasks",
+    ]
+    assert requests[1].url.params["operatorId"] == "union-operator"
+    assert requests[1].headers["x-acs-dingtalk-access-token"] == "openapi-token"
+    assert requests[1].read().decode() == (
+        '{"subject":"跟进家长回访","creatorId":"union-operator",'
+        '"description":"TDL ID: tdl-1","executorIds":["union-owner"],'
+        '"participantIds":["union-leader"],'
+        '"detailUrl":{"appUrl":"https://tdl.example.com/tasks/tdl-1",'
+        '"pcUrl":"https://tdl.example.com/tasks/tdl-1"},'
+        '"dueTime":1779273000000,"sourceId":"tdl-1"}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_work_todo_task_requires_detail_url() -> None:
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(500))) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        with pytest.raises(DingTalkAPIError, match="requires detail_url"):
+            await client.create_work_todo_task(
+                owner_union_id="union-owner",
+                title="跟进家长回访",
+                detail_url="   ",
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_personal_todo_task_uses_user_access_token() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"result": {"taskId": "todo-2"}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        task_id = await client.create_personal_todo_task(
+            user_access_token="user-token",
+            title="整理月会纪要",
+            description="TDL ID: tdl-2",
+            due_at=datetime(2026, 5, 21, 1, 0, tzinfo=UTC),
+            executor_ids=["union-owner"],
+            ding_notify="1",
+        )
+
+    assert task_id == "todo-2"
+    assert [request.url.path for request in requests] == ["/v1.0/todo/users/me/personalTasks"]
+    assert requests[0].headers["x-acs-dingtalk-access-token"] == "user-token"
+    assert requests[0].read().decode() == (
+        '{"subject":"整理月会纪要","description":"TDL ID: tdl-2",'
+        '"executorIds":["union-owner"],"participantIds":[],'
+        '"dueTime":1779325200000,"notifyConfigs":{"dingNotify":"1"}}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_work_todo_task_raises_when_response_has_no_task_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
+        return httpx.Response(200, json={})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        with pytest.raises(DingTalkAPIError, match="Failed to create DingTalk work todo task"):
+            await client.create_work_todo_task(
+                owner_union_id="union-owner",
+                title="跟进家长回访",
+                detail_url="https://tdl.example.com/tasks/tdl-1",
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_work_todo_task_raises_on_http_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
+        return httpx.Response(500, json={"message": "failed"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        with pytest.raises(DingTalkAPIError, match="Failed to create DingTalk work todo task"):
+            await client.create_work_todo_task(
+                owner_union_id="union-owner",
+                title="跟进家长回访",
+                detail_url="https://tdl.example.com/tasks/tdl-1",
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_work_todo_task_raises_on_api_code_even_with_task_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1.0/oauth2/accessToken":
+            return httpx.Response(200, json={"accessToken": "openapi-token", "expireIn": 7200})
+        return httpx.Response(200, json={"code": "InvalidParameter.TaskTitle", "taskId": "todo-1"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        with pytest.raises(DingTalkAPIError, match="Failed to create DingTalk work todo task"):
+            await client.create_work_todo_task(
+                owner_union_id="union-owner",
+                title="跟进家长回访",
+                detail_url="https://tdl.example.com/tasks/tdl-1",
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_personal_todo_task_raises_when_response_has_no_task_id() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={})),
+    ) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        with pytest.raises(DingTalkAPIError, match="Failed to create DingTalk personal todo task"):
+            await client.create_personal_todo_task(
+                user_access_token="user-token",
+                title="整理月会纪要",
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_personal_todo_task_keeps_explicit_zero_notify_value() -> None:
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"id": "todo-2"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = DingTalkClient(
+            app_key="app-key",
+            app_secret="app-secret",
+            agent_id="agent-1",
+            http_client=http_client,
+        )
+
+        await client.create_personal_todo_task(
+            user_access_token="user-token",
+            title="整理月会纪要",
+            ding_notify="0",
+        )
+
+    assert requests[0].read().decode() == (
+        '{"subject":"整理月会纪要","description":"",'
+        '"executorIds":[],"participantIds":[],"notifyConfigs":{"dingNotify":"0"}}'
+    )
+
+
+def test_todo_due_at_requires_timezone() -> None:
+    client = DingTalkClient(app_key="app-key", app_secret="app-secret", agent_id="agent-1")
+
+    with pytest.raises(DingTalkAPIError, match="must include timezone information"):
+        client._to_unix_millis(datetime(2026, 5, 20, 10, 30))
+
+
+@pytest.mark.asyncio
 async def test_exchange_user_authorization_code_fetches_user_token() -> None:
     get_settings.cache_clear()
     requests = []
