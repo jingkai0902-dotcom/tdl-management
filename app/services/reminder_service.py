@@ -11,7 +11,7 @@ from app.integrations.dingtalk_card import (
     render_interactive_card_data,
     render_markdown,
 )
-from app.integrations.dingtalk_client import DingTalkClient
+from app.integrations.dingtalk_client import DingTalkAPIError, DingTalkClient
 from app.models import AuditLog, TDL
 from app.schemas import (
     ReminderCandidateRead,
@@ -196,12 +196,26 @@ async def send_reminder_dispatches(
     dispatches: list[ReminderDispatchRead],
     *,
     interactive_card_template_id: str | None = None,
+    require_interactive_cards: bool | None = None,
 ) -> int:
+    settings = get_settings()
     template_id = (
         interactive_card_template_id
         if interactive_card_template_id is not None
-        else get_settings().dingtalk_tdl_card_template_id
+        else settings.dingtalk_tdl_card_template_id
     )
+    requires_interactive = (
+        require_interactive_cards
+        if require_interactive_cards is not None
+        else settings.dingtalk_require_interactive_reminder_cards
+    )
+    if requires_interactive and not template_id and any(
+        dispatch.card.buttons for dispatch in dispatches
+    ):
+        raise DingTalkAPIError(
+            "DingTalk interactive reminder cards are required, "
+            "but dingtalk_tdl_card_template_id is not configured"
+        )
     for dispatch in dispatches:
         if template_id:
             await client.send_interactive_card_to_user(

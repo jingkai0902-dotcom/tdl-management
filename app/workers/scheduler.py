@@ -69,7 +69,11 @@ async def run_scheduled_reminder_cycle(
         result = await run_reminder_cycle(session, as_of=effective_as_of)
     client = client_factory()
     try:
-        await send_reminder_dispatches(client, result.dispatches)
+        await send_reminder_dispatches(
+            client,
+            result.dispatches,
+            require_interactive_cards=settings.dingtalk_require_interactive_reminder_cards,
+        )
     finally:
         await client.close()
     return result

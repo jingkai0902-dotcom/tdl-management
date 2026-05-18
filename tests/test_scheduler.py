@@ -74,9 +74,15 @@ async def test_run_scheduled_reminder_cycle_sends_dispatches(monkeypatch) -> Non
         assert as_of == datetime(2026, 5, 18, 8, 30, tzinfo=UTC)
         return expected
 
-    async def fake_send_reminder_dispatches(client, dispatches):
+    async def fake_send_reminder_dispatches(
+        client,
+        dispatches,
+        *,
+        require_interactive_cards=False,
+    ):
         assert client is fake_client
         assert dispatches == []
+        assert require_interactive_cards is False
         return 0
 
     monkeypatch.setattr("app.workers.scheduler.run_reminder_cycle", fake_run_reminder_cycle)
