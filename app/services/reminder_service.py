@@ -1,5 +1,6 @@
 from collections import Counter
 from datetime import datetime, timedelta
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,7 @@ from app.schemas import (
 
 OPEN_STATUSES = {"active", "attention", "snoozed"}
 DEFAULT_SHIFT_TYPE = "standard_shift"
+logger = logging.getLogger(__name__)
 
 
 def build_reminder_candidates(
@@ -208,12 +210,29 @@ async def send_reminder_dispatches(
                 card_data=render_interactive_card_data(dispatch.card),
             )
         else:
+            if dispatch.card.buttons:
+                logger.warning(
+                    "DingTalk interactive reminder card template is not configured; "
+                    "sending non-actionable work notification for owner_id=%s tdl=%s",
+                    dispatch.owner_id,
+                    dispatch.card.body[0] if dispatch.card.body else "",
+                )
             await client.send_work_markdown(
                 user_ids=[dispatch.owner_id],
                 title=dispatch.card.title,
-                text=render_markdown(dispatch.card),
+                text=_render_non_interactive_reminder(dispatch.card),
             )
     return len(dispatches)
+
+
+def _render_non_interactive_reminder(card: TDLCardRead) -> str:
+    return "\n".join(
+        [
+            render_markdown(card, include_actions=False),
+            "",
+            "提示：这是一条工作通知，当前不支持在这里点击处理。交互卡片启用后会显示可点击按钮。",
+        ]
+    )
 
 
 def _is_remindable(tdl: TDL, as_of: datetime) -> bool:
