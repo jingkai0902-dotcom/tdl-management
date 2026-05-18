@@ -49,6 +49,17 @@ PYTHONPATH=. .venv/bin/pytest -q
 
 - `DINGTALK_TDL_CARD_TEMPLATE_ID`
 
+提醒端互动卡模板需要在钉钉卡片搭建器中暴露这些变量：
+
+- `msgTitle`
+- `staticMsgContent`
+- `button1Text` / `button1ActionId` / `button1Visible`
+- `button2Text` / `button2ActionId` / `button2Visible`
+- `button3Text` / `button3ActionId` / `button3Visible`
+- `button4Text` / `button4ActionId` / `button4Visible`
+
+按钮动作需要在模板中固定枚举，点击请求参数传 `actionId=${buttonNActionId}`；显示控制绑定对应的 `buttonNVisible`。
+
 ## 生产目录
 
 - 代码目录：`/opt/bots/tdl/backend`

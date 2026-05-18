@@ -155,7 +155,25 @@ def test_render_interactive_card_data_keeps_button_actions() -> None:
 
     assert result["msgTitle"] == "需要支持"
     assert "审核课程方案 已逾期 2 天" in result["staticMsgContent"]
-    assert build_card_action_id("complete", card.buttons[0].tdl_id) in result["sys_full_json_obj"]
+    assert result["button1Text"] == "已完成"
+    assert result["button1ActionId"] == build_card_action_id("complete", card.buttons[0].tdl_id)
+    assert result["button1Visible"] == "true"
+    assert result["button4Text"] == "不是我的任务"
+    assert result["button4ActionId"] == build_card_action_id("reject", card.buttons[3].tdl_id)
+    assert result["button4Visible"] == "true"
+
+
+def test_render_interactive_card_data_hides_unused_button_slots() -> None:
+    card = build_reminder_card(StubTDL("active"), action="due_today", overdue_days=0)
+
+    result = render_interactive_card_data(card)
+
+    assert result["button1Text"] == "标记完成"
+    assert result["button2Text"] == "暂缓"
+    assert result["button3Text"] == "不是我的任务"
+    assert result["button4Text"] == ""
+    assert result["button4ActionId"] == ""
+    assert result["button4Visible"] == "false"
 
 
 def test_render_standard_card_data_keeps_button_actions() -> None:
