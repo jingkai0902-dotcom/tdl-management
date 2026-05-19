@@ -131,6 +131,49 @@ async def test_chatbot_handler_routes_text_action_before_intake(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_chatbot_handler_prefers_template_card_for_actionable_cards(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_intake(session, payload):
+        return SimpleNamespace(
+            title="TDL 草稿",
+            status="draft",
+            buttons=[SimpleNamespace(action="confirm", label="确认创建", tdl_id=uuid4())],
+        )
+
+    async def fake_send_template_card_response(user_id, card):
+        seen["template"] = (user_id, card.title)
+        return True
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot._send_template_card_response",
+        fake_send_template_card_response,
+    )
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_card",
+        lambda self, card_data, message: seen.setdefault("reply_card", card_data),
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-1",
+                "text": {"content": "test"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen == {"template": ("user-1", "TDL 草稿")}
+
+
+@pytest.mark.asyncio
 async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
     seen = {}
 
@@ -179,7 +222,7 @@ async def test_chatbot_handler_accepts_rich_text_as_text(monkeypatch) -> None:
     assert payload == "OK"
     assert seen == {
         "content": "今天整理活动复盘\n完成标准是列出三条结论",
-        "card_kwargs": {"include_actions": False, "extra_body_lines": []},
+        "card_kwargs": {"include_actions": True, "extra_body_lines": []},
         "reply_card": {"card": "rendered"},
     }
 
@@ -476,6 +519,7 @@ async def test_chatbot_handler_shows_confirmation_hint_for_complete_draft(monkey
     )
 
     assert code == 200
+    assert seen["card_kwargs"]["include_actions"] is True
     assert "确认创建" in seen["card_kwargs"]["extra_body_lines"][0]
     assert "忽略" in seen["card_kwargs"]["extra_body_lines"][0]
 
@@ -514,6 +558,7 @@ async def test_chatbot_handler_shows_supplement_hint_for_incomplete_draft(monkey
     )
 
     assert code == 200
+    assert seen["card_kwargs"]["include_actions"] is True
     footer = seen["card_kwargs"]["extra_body_lines"][0]
     assert "补充缺失信息" in footer
     assert "忽略" in footer

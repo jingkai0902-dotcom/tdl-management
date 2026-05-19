@@ -10,7 +10,12 @@ from dingtalk_stream.chatbot import ChatbotHandler, ChatbotMessage
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.integrations.dingtalk_card import render_markdown, render_standard_card_data
+from app.integrations.dingtalk_card import (
+    render_interactive_card_data,
+    render_markdown,
+    render_standard_card_data,
+)
+from app.integrations.dingtalk_client import DingTalkClient
 from app.schemas import DingTalkIncomingMessage
 from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
 from app.services.intake_service import intake_dingtalk_message
@@ -66,9 +71,11 @@ class TDLChatbotHandler(ChatbotHandler):
             )
             if card is None:
                 card = await intake_dingtalk_message(session, payload)
+        if await _send_template_card_response(payload.sender_id, card):
+            return AckMessage.STATUS_OK, "OK"
         card_data = render_standard_card_data(
             card,
-            include_actions=False,
+            include_actions=True,
             extra_body_lines=_chatbot_card_footer_lines(card),
         )
         if not self.reply_card(card_data, message):
@@ -135,6 +142,26 @@ async def _send_card_action_feedback(actor_id: str, text: str) -> None:
         )
     except Exception:
         logger.exception("Failed to send card action feedback to user=%s", actor_id)
+
+
+async def _send_template_card_response(user_id: str, card) -> bool:
+    """Prefer the verified DingTalk builder template for cards that need callbacks."""
+    settings = get_settings()
+    if not settings.dingtalk_tdl_card_template_id or not getattr(card, "buttons", None):
+        return False
+    client = DingTalkClient()
+    try:
+        await client.send_interactive_card_to_user(
+            user_id=user_id,
+            card_template_id=settings.dingtalk_tdl_card_template_id,
+            card_data=render_interactive_card_data(card),
+        )
+    except Exception:
+        logger.exception("Failed to send template card response to user=%s", user_id)
+        return False
+    finally:
+        await client.close()
+    return True
 
 
 def run_stream_bot() -> None:
