@@ -1,5 +1,7 @@
+from datetime import datetime
 from types import SimpleNamespace
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -7,9 +9,13 @@ from app.integrations.dingtalk_card import build_card_action_id
 from app.services.dingtalk_card_callback_service import (
     FOLLOW_UP_SUBMITTERS,
     ONE_CLICK_ACTIONS,
+    _default_snooze_until,
     _management_owner_ids,
     handle_tdl_card_callback,
 )
+
+
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 @pytest.mark.asyncio
@@ -127,6 +133,13 @@ async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() ->
     assert result.tdl_id == str(tdl_id)
     assert result.next_action == "collect_due_at"
     assert result.required_fields == ["due_at"]
+    assert result.response_text == "请回复新的截止时间，例如：延期到明天下午六点"
+
+
+def test_default_snooze_until_uses_tomorrow_morning_shanghai() -> None:
+    result = _default_snooze_until(datetime(2026, 5, 19, 23, 30, tzinfo=SHANGHAI_TZ))
+
+    assert result == datetime(2026, 5, 20, 9, 0, tzinfo=SHANGHAI_TZ)
 
 
 @pytest.mark.asyncio
@@ -260,6 +273,30 @@ async def test_handle_tdl_card_callback_submits_snooze(monkeypatch) -> None:
 
     assert result.handled is True
     assert result.status == "snoozed"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_defaults_snooze_without_submitted_time(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        assert session == "session"
+        assert actor_id == "user-1"
+        assert submission.snooze_until is not None
+        return SimpleNamespace(tdl_id=tdl_id, status="snoozed")
+
+    monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "snooze", fake_submitter)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("snooze", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "snooze"
+    assert result.status == "snoozed"
+    assert result.response_text.startswith("已暂缓，下次提醒：")
 
 
 @pytest.mark.asyncio

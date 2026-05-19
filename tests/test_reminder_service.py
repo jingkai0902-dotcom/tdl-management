@@ -372,6 +372,9 @@ async def test_send_reminder_dispatches_uses_interactive_cards_when_configured()
     assert client.interactive_cards[0]["user_id"] == "owner-1"
     assert client.interactive_cards[0]["card_template_id"] == "template.schema"
     assert client.interactive_cards[0]["card_data"]["msgTitle"] == "今日待办"
+    assert client.interactive_cards[0]["card_data"]["button1Text"] == "标记完成"
+    assert client.interactive_cards[0]["card_data"]["button3Text"] == "不是我的任务"
+    assert client.interactive_cards[0]["card_data"]["button4Visible"] == "false"
 
 
 @pytest.mark.asyncio

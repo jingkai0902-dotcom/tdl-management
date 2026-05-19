@@ -101,7 +101,7 @@ class TDLCardCallbackHandler(CallbackHandler):
                 submitted_fields=params,
             )
 
-        if result.handled and result.response_text:
+        if result.response_text:
             await _send_card_action_feedback(actor_id, result.response_text)
 
         return AckMessage.STATUS_OK, {
@@ -114,16 +114,12 @@ class TDLCardCallbackHandler(CallbackHandler):
         }
 
     async def raw_process(self, callback_message):
-        """Override to include card update instructions for visual feedback."""
         code, message = await self.process(callback_message)
         ack_message = AckMessage()
         ack_message.code = code
         ack_message.headers.message_id = callback_message.headers.message_id
         ack_message.headers.content_type = Headers.CONTENT_TYPE_APPLICATION_JSON
-        ack_message.data = {
-            "response": message,
-            "cardUpdateOptions": {"updateCardDataByKey": True},
-        }
+        ack_message.data = {"response": message}
         return ack_message
 
 
