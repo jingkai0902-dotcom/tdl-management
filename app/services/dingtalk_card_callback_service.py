@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 import logging
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,7 @@ from app.services.tdl_service import (
 from app.services.calendar_service import confirm_tdl_with_calendar, postpone_tdl_with_calendar
 
 logger = logging.getLogger(__name__)
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True)
@@ -142,6 +145,15 @@ async def _submit_snooze(
     )
 
 
+def _default_snooze_until(now: datetime | None = None) -> datetime:
+    resolved_now = now or datetime.now(tz=SHANGHAI_TZ)
+    if resolved_now.tzinfo is None:
+        resolved_now = resolved_now.replace(tzinfo=UTC)
+    local_now = resolved_now.astimezone(SHANGHAI_TZ)
+    tomorrow = local_now + timedelta(days=1)
+    return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
+
+
 async def _submit_completion_criteria(
     session: AsyncSession,
     *,
@@ -196,7 +208,13 @@ async def handle_tdl_card_callback(
         submission_model = FOLLOW_UP_SUBMISSION_MODELS.get(action)
         if submitter is not None and submission_model is not None:
             try:
-                submission = submission_model.model_validate(submitted_fields or {})
+                resolved_fields = submitted_fields or {}
+                if action == "snooze" and not resolved_fields.get("snooze_until"):
+                    resolved_fields = {
+                        **resolved_fields,
+                        "snooze_until": _default_snooze_until(),
+                    }
+                submission = submission_model.model_validate(resolved_fields)
             except ValidationError as exc:
                 logger.debug("Card callback submission validation failed: %s", exc)
                 submission = submission_model()
@@ -211,7 +229,7 @@ async def handle_tdl_card_callback(
                     "set_owner": "负责人已更新",
                     "set_due_at": "截止时间已更新",
                     "postpone": "已延期",
-                    "snooze": "已暂缓",
+                    "snooze": _snooze_feedback(submission),
                     "set_completion_criteria": "完成标准已更新",
                 }
                 return CardCallbackResult(
@@ -228,6 +246,7 @@ async def handle_tdl_card_callback(
             tdl_id=str(tdl_id),
             next_action=next_action,
             required_fields=required_fields,
+            response_text=_follow_up_prompt(action),
         )
 
     feedback = {
@@ -259,8 +278,27 @@ async def handle_tdl_card_callback(
     )
 
 
+def _snooze_feedback(submission) -> str:
+    snooze_until = getattr(submission, "snooze_until", None)
+    return (
+        "已暂缓，"
+        f"下次提醒：{snooze_until.astimezone(SHANGHAI_TZ):%Y-%m-%d %H:%M}"
+        if snooze_until
+        else "已暂缓"
+    )
+
+
 async def _get_existing_tdl(session: AsyncSession, tdl_id) -> TDL | None:
     getter = getattr(session, "get", None)
     if getter is None:
         return None
     return await getter(TDL, tdl_id)
+
+
+def _follow_up_prompt(action: str) -> str | None:
+    return {
+        "postpone": "请回复新的截止时间，例如：延期到明天下午六点",
+        "set_due_at": "请回复截止时间，例如：改到明天下午六点",
+        "set_owner": "请回复负责人，例如：负责人改成李珍",
+        "set_completion_criteria": "请回复完成标准，例如：完成标准是列出三条动作",
+    }.get(action)

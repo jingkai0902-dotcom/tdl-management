@@ -309,6 +309,7 @@ async def test_card_callback_handler_reads_standard_card_action_ids(monkeypatch)
 async def test_card_callback_handler_cancels_draft(monkeypatch) -> None:
     tdl_id = uuid4()
     cancel_action_id = build_card_action_id("cancel", tdl_id)
+    seen = {}
 
     async def fake_handle_tdl_card_callback(session, *, action_id, actor_id, submitted_fields):
         assert session == "session"
@@ -327,9 +328,10 @@ async def test_card_callback_handler_cancels_draft(monkeypatch) -> None:
         "app.integrations.dingtalk_stream_bot.handle_tdl_card_callback",
         fake_handle_tdl_card_callback,
     )
-    # also stub out the feedback sender to avoid DingTalkClient init
+
     async def fake_feedback(actor_id, text):
-        return None
+        seen["feedback"] = (actor_id, text)
+
     monkeypatch.setattr(
         "app.integrations.dingtalk_stream_bot._send_card_action_feedback",
         fake_feedback,
@@ -339,6 +341,7 @@ async def test_card_callback_handler_cancels_draft(monkeypatch) -> None:
         SimpleNamespace(
             data={
                 "userId": "user-1",
+                "outTrackId": "track-1",
                 "content": '{"cardPrivateData":{"actionIds":["' + cancel_action_id + '"],"params":{}}}',
             }
         )
@@ -348,6 +351,7 @@ async def test_card_callback_handler_cancels_draft(monkeypatch) -> None:
     assert payload["handled"] is True
     assert payload["action"] == "cancel"
     assert payload["status"] == "canceled"
+    assert seen["feedback"] == ("user-1", "已忽略草稿")
 
 
 @pytest.mark.asyncio
@@ -386,6 +390,56 @@ async def test_card_callback_handler_passes_follow_up_fields(monkeypatch) -> Non
     assert code == 200
     assert payload["handled"] is True
     assert payload["action"] == "postpone"
+
+
+@pytest.mark.asyncio
+async def test_card_callback_handler_sends_follow_up_prompt(monkeypatch) -> None:
+    tdl_id = uuid4()
+    postpone_action_id = build_card_action_id("postpone", tdl_id)
+    seen = {}
+
+    async def fake_handle_tdl_card_callback(session, *, action_id, actor_id, submitted_fields):
+        assert session == "session"
+        assert action_id == postpone_action_id
+        assert actor_id == "user-1"
+        return CardCallbackResult(
+            handled=False,
+            action="postpone",
+            tdl_id=str(tdl_id),
+            next_action="collect_due_at",
+            required_fields=["due_at"],
+            response_text="请回复新的截止时间，例如：延期到明天下午六点",
+        )
+
+    async def fake_feedback(actor_id, text):
+        seen["feedback"] = (actor_id, text)
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_tdl_card_callback",
+        fake_handle_tdl_card_callback,
+    )
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot._send_card_action_feedback",
+        fake_feedback,
+    )
+
+    code, payload = await TDLCardCallbackHandler().process(
+        SimpleNamespace(
+            data={
+                "userId": "user-1",
+                "content": '{"cardPrivateData":{"params":{"actionId":"'
+                + postpone_action_id
+                + '"}}}',
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload["handled"] is False
+    assert payload["nextAction"] == "collect_due_at"
+    assert "cardData" not in payload
+    assert seen["feedback"] == ("user-1", "请回复新的截止时间，例如：延期到明天下午六点")
 
 
 @pytest.mark.asyncio
