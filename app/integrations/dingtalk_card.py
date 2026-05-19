@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-import json
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -183,26 +182,23 @@ def render_markdown(card: TDLCard, *, include_actions: bool = True) -> str:
 
 
 def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
-    """Render data for templates exposing msgTitle/staticMsgContent/sys_full_json_obj."""
-    return {
+    """Render data for a DingTalk builder template with fixed button slots."""
+    result = {
         "msgTitle": card.title,
         "staticMsgContent": "\n".join(card.body),
-        "sys_full_json_obj": json.dumps(
-            {
-                "order": ["msgTitle", "staticMsgContent", "msgButtons"],
-                "msgButtons": [
-                    {
-                        "text": button.label,
-                        "color": "blue" if index == 0 else "gray",
-                        "id": build_card_action_id(button.action, button.tdl_id),
-                        "request": True,
-                    }
-                    for index, button in enumerate(card.buttons)
-                ],
-            },
-            ensure_ascii=False,
-        ),
     }
+    for index in range(4):
+        slot = index + 1
+        if index < len(card.buttons):
+            button = card.buttons[index]
+            result[f"button{slot}Text"] = button.label
+            result[f"button{slot}ActionId"] = build_card_action_id(button.action, button.tdl_id)
+            result[f"button{slot}Visible"] = "true"
+        else:
+            result[f"button{slot}Text"] = ""
+            result[f"button{slot}ActionId"] = ""
+            result[f"button{slot}Visible"] = "false"
+    return result
 
 
 def render_standard_card_data(
