@@ -76,7 +76,7 @@ async def test_handle_tdl_card_callback_routes_reject(monkeypatch) -> None:
         assert session == "session"
         assert incoming_tdl_id == tdl_id
         assert actor_id == "user-1"
-        return SimpleNamespace(tdl_id=tdl_id, status="rejected")
+        return SimpleNamespace(tdl_id=tdl_id, title="招生方案终稿", status="rejected")
 
     monkeypatch.setitem(ONE_CLICK_ACTIONS, "reject", fake_reject_tdl)
 
@@ -89,7 +89,8 @@ async def test_handle_tdl_card_callback_routes_reject(monkeypatch) -> None:
     assert result.handled is True
     assert result.action == "reject"
     assert result.status == "rejected"
-    assert result.response_text == "已标记为不是我的任务"
+    assert "已标记为不是我的任务" in result.response_text
+    assert "招生方案终稿" in result.response_text
 
 
 @pytest.mark.asyncio
@@ -260,7 +261,7 @@ async def test_handle_tdl_card_callback_submits_snooze(monkeypatch) -> None:
         assert session == "session"
         assert actor_id == "user-1"
         assert submission.snooze_until.isoformat() == "2026-05-20T09:00:00+08:00"
-        return SimpleNamespace(tdl_id=tdl_id, status="snoozed")
+        return SimpleNamespace(tdl_id=tdl_id, title="招生方案终稿", status="snoozed")
 
     monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "snooze", fake_submitter)
 
@@ -283,7 +284,7 @@ async def test_handle_tdl_card_callback_defaults_snooze_without_submitted_time(m
         assert session == "session"
         assert actor_id == "user-1"
         assert submission.snooze_until is not None
-        return SimpleNamespace(tdl_id=tdl_id, status="snoozed")
+        return SimpleNamespace(tdl_id=tdl_id, title="招生方案终稿", status="snoozed")
 
     monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "snooze", fake_submitter)
 
@@ -296,7 +297,9 @@ async def test_handle_tdl_card_callback_defaults_snooze_without_submitted_time(m
     assert result.handled is True
     assert result.action == "snooze"
     assert result.status == "snoozed"
-    assert result.response_text.startswith("已暂缓，下次提醒：")
+    assert "已暂缓" in result.response_text
+    assert "招生方案终稿" in result.response_text
+    assert "下次提醒：2026-05-20 09:00" in result.response_text
 
 
 @pytest.mark.asyncio

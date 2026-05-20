@@ -225,19 +225,12 @@ async def handle_tdl_card_callback(
                 submission=submission,
             )
             if tdl is not None:
-                follow_up_feedback = {
-                    "set_owner": "负责人已更新",
-                    "set_due_at": "截止时间已更新",
-                    "postpone": "已延期",
-                    "snooze": _snooze_feedback(submission),
-                    "set_completion_criteria": "完成标准已更新",
-                }
                 return CardCallbackResult(
                     handled=True,
                     action=action,
                     tdl_id=str(tdl.tdl_id),
                     status=tdl.status,
-                    response_text=follow_up_feedback.get(action, f"已更新：{action}"),
+                    response_text=_follow_up_feedback(action, tdl, submission),
                 )
         next_action, required_fields = follow_up
         return CardCallbackResult(
@@ -249,13 +242,6 @@ async def handle_tdl_card_callback(
             response_text=_follow_up_prompt(action),
         )
 
-    feedback = {
-        "confirm": "TDL 已创建",
-        "complete": "已完成",
-        "need_help": "已标记为需要协助",
-        "reject": "已标记为不是我的任务",
-        "cancel": "已忽略草稿",
-    }.get(action, f"操作完成：{action}")
     try:
         tdl = await handler(session, tdl_id, actor_id)
     except ValueError:
@@ -267,24 +253,53 @@ async def handle_tdl_card_callback(
             action=action,
             tdl_id=str(existing.tdl_id),
             status=existing.status,
-            response_text=f"{feedback}（已处理）",
+            response_text=f"{_one_click_feedback(action, existing)}\n（已处理）",
         )
     return CardCallbackResult(
         handled=True,
         action=action,
         tdl_id=str(tdl.tdl_id),
         status=tdl.status,
-        response_text=feedback,
+        response_text=_one_click_feedback(action, tdl),
     )
 
 
-def _snooze_feedback(submission) -> str:
+def _feedback_title(tdl) -> str:
+    title = getattr(tdl, "title", None)
+    return f"「{title}」" if title else "这条 TDL"
+
+
+def _one_click_feedback(action: str, tdl) -> str:
+    title = _feedback_title(tdl)
+    return {
+        "confirm": f"TDL 已创建\n{title} 已进入待办",
+        "complete": f"已标记完成\n{title} 已完成，不再提醒",
+        "need_help": f"已标记为需要协助\n{title} 已进入需协助状态",
+        "reject": f"已标记为不是我的任务\n{title} 已拒绝归属，不再提醒你",
+        "cancel": f"已忽略草稿\n{title} 已取消，不再提醒",
+    }.get(action, f"操作完成：{action}\n{title}")
+
+
+def _follow_up_feedback(action: str, tdl, submission) -> str:
+    title = _feedback_title(tdl)
+    if action == "snooze":
+        return _snooze_feedback(submission, title=title)
+    return {
+        "set_owner": f"负责人已更新\n{title}",
+        "set_due_at": f"截止时间已更新\n{title}",
+        "postpone": f"已延期\n{title}",
+        "set_completion_criteria": f"完成标准已更新\n{title}",
+    }.get(action, f"已更新：{action}\n{title}")
+
+
+def _snooze_feedback(submission, *, title: str | None = None) -> str:
     snooze_until = getattr(submission, "snooze_until", None)
+    prefix = "已暂缓" if title is None else f"已暂缓\n{title}"
     return (
-        "已暂缓，"
+        f"{prefix}\n"
         f"下次提醒：{snooze_until.astimezone(SHANGHAI_TZ):%Y-%m-%d %H:%M}"
         if snooze_until
-        else "已暂缓"
+        else prefix
     )
 
 
