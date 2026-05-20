@@ -18,11 +18,14 @@ from app.roster import (
     resolve_management_user_id,
 )
 from app.services.calendar_service import confirm_tdl_with_calendar, create_tdl_with_calendar
+from app.services.calendar_service import sync_calendar_due_at_change_best_effort
 from app.services.tdl_service import (
     cancel_draft_tdl,
     create_draft_tdl,
     find_latest_incomplete_draft,
+    find_latest_recent_open_tdl,
     find_latest_recent_draft,
+    update_open_tdl_from_follow_up,
     update_draft_tdl,
 )
 
@@ -203,6 +206,51 @@ def _can_update_completion_criteria(latest_draft, *, source_text: str, is_correc
     )
 
 
+def _build_follow_up_updates(
+    latest_tdl,
+    *,
+    source_text: str,
+    sender_id: str,
+    deterministic_owner_id: str | None,
+    follow_up,
+    has_confident_ai_follow_up: bool,
+    is_correction: bool,
+) -> TDLDraftUpdate:
+    return TDLDraftUpdate(
+        owner_id=(
+            deterministic_owner_id
+            or _follow_up_owner_id(
+                source_text,
+                sender_id=sender_id,
+                ai_owner_id=follow_up.owner_id if follow_up is not None else None,
+            )
+        ),
+        due_at=(
+            _normalize_date_only_due_at(
+                follow_up.due_at,
+                source_text=source_text,
+            )
+            if has_confident_ai_follow_up
+            and _can_update_due_at(
+                latest_tdl,
+                source_text=source_text,
+                is_correction=is_correction,
+            )
+            else None
+        ),
+        completion_criteria=(
+            follow_up.completion_criteria
+            if has_confident_ai_follow_up
+            and _can_update_completion_criteria(
+                latest_tdl,
+                source_text=source_text,
+                is_correction=is_correction,
+            )
+            else None
+        ),
+    )
+
+
 def _should_attempt_follow_up(
     latest_draft,
     *,
@@ -313,38 +361,14 @@ async def intake_dingtalk_message(
             >= float(follow_up_rules.get("minimum_confidence", 0.80))
         )
         if deterministic_owner_id is not None or has_confident_ai_follow_up:
-            updates = TDLDraftUpdate(
-                owner_id=(
-                    deterministic_owner_id
-                    or _follow_up_owner_id(
-                        message.content,
-                        sender_id=message.sender_id,
-                        ai_owner_id=follow_up.owner_id if follow_up is not None else None,
-                    )
-                ),
-                due_at=(
-                    _normalize_date_only_due_at(
-                        follow_up.due_at,
-                        source_text=message.content,
-                    )
-                    if has_confident_ai_follow_up
-                    and _can_update_due_at(
-                        latest_draft,
-                        source_text=message.content,
-                        is_correction=is_correction,
-                    )
-                    else None
-                ),
-                completion_criteria=(
-                    follow_up.completion_criteria
-                    if has_confident_ai_follow_up
-                    and _can_update_completion_criteria(
-                        latest_draft,
-                        source_text=message.content,
-                        is_correction=is_correction,
-                    )
-                    else None
-                ),
+            updates = _build_follow_up_updates(
+                latest_draft,
+                source_text=message.content,
+                sender_id=message.sender_id,
+                deterministic_owner_id=deterministic_owner_id,
+                follow_up=follow_up,
+                has_confident_ai_follow_up=has_confident_ai_follow_up,
+                is_correction=is_correction,
             )
             if updates.model_dump(exclude_none=True):
                 tdl = await update_draft_tdl(
@@ -354,6 +378,55 @@ async def intake_dingtalk_message(
                     message.sender_id,
                 )
                 return build_draft_card(tdl)
+
+    if _looks_like_draft_correction(message.content):
+        latest_open_tdl = await find_latest_recent_open_tdl(
+            session,
+            created_by=message.sender_id,
+            max_age_minutes=max_age_minutes,
+        )
+        if latest_open_tdl is not None:
+            deterministic_owner_id = _owner_id_from_correction_text(
+                message.content,
+                sender_id=message.sender_id,
+            )
+            try:
+                follow_up = await client.extract_tdl_follow_up(
+                    draft_title=latest_open_tdl.title,
+                    source_text=message.content,
+                )
+            except TDLExtractionError:
+                follow_up = None
+            has_confident_ai_follow_up = (
+                follow_up is not None
+                and follow_up.is_follow_up
+                and follow_up.confidence
+                >= float(follow_up_rules.get("minimum_confidence", 0.80))
+            )
+            if deterministic_owner_id is not None or has_confident_ai_follow_up:
+                updates = _build_follow_up_updates(
+                    latest_open_tdl,
+                    source_text=message.content,
+                    sender_id=message.sender_id,
+                    deterministic_owner_id=deterministic_owner_id,
+                    follow_up=follow_up,
+                    has_confident_ai_follow_up=has_confident_ai_follow_up,
+                    is_correction=True,
+                )
+                if updates.model_dump(exclude_none=True):
+                    tdl = await update_open_tdl_from_follow_up(
+                        session,
+                        latest_open_tdl.tdl_id,
+                        updates,
+                        message.sender_id,
+                    )
+                    if updates.due_at is not None or updates.owner_id is not None:
+                        tdl = await sync_calendar_due_at_change_best_effort(
+                            session,
+                            tdl,
+                            actor_id=message.sender_id,
+                        )
+                    return build_created_card(tdl)
 
     try:
         extracted = await client.extract_tdl_fields(message.content)

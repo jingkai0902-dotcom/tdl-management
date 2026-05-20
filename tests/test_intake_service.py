@@ -553,6 +553,181 @@ async def test_intake_updates_owner_from_not_old_name_but_new_name_correction(mo
 
 
 @pytest.mark.asyncio
+async def test_intake_updates_recent_active_tdl_from_explicit_owner_correction(monkeypatch) -> None:
+    session = FakeSession()
+    active_tdl = TDL(
+        tdl_id=uuid4(),
+        title="组织斯坦教学员工集体磨课",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 21, 16, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="每一位斯坦教学员工都完成了一次磨课",
+        priority="P1",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="active",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        return active_tdl
+
+    async def fake_update_open_tdl_from_follow_up(session, tdl_id, payload, actor_id):
+        active_tdl.owner_id = payload.owner_id
+        active_tdl.due_at = payload.due_at or active_tdl.due_at
+        active_tdl.completion_criteria = payload.completion_criteria or active_tdl.completion_criteria
+        return active_tdl
+
+    async def fake_sync_calendar_due_at_change_best_effort(session, tdl, *, actor_id, client=None):
+        return tdl
+
+    class LowConfidenceAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=False,
+                due_at=None,
+                completion_criteria=None,
+                confidence=0.20,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_open_tdl_from_follow_up",
+        fake_update_open_tdl_from_follow_up,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.sync_calendar_due_at_change_best_effort",
+        fake_sync_calendar_due_at_change_best_effort,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-active-owner",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="嗯，需要补充一下刚才发的这一条。不是石影的，是李珍的任务。不是siri",
+        ),
+        LowConfidenceAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert active_tdl.status == "active"
+    assert active_tdl.owner_id == "0611436746849471"
+
+
+@pytest.mark.asyncio
+async def test_intake_updates_recent_active_tdl_from_due_at_and_criteria_correction(monkeypatch) -> None:
+    session = FakeSession()
+    active_tdl = TDL(
+        tdl_id=uuid4(),
+        title="组织斯坦教学员工集体磨课",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 21, 16, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="每一位斯坦教学员工都完成了一次磨课",
+        priority="P1",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="active",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        return active_tdl
+
+    async def fake_update_open_tdl_from_follow_up(session, tdl_id, payload, actor_id):
+        active_tdl.due_at = payload.due_at or active_tdl.due_at
+        active_tdl.completion_criteria = payload.completion_criteria or active_tdl.completion_criteria
+        return active_tdl
+
+    synced = []
+
+    async def fake_sync_calendar_due_at_change_best_effort(session, tdl, *, actor_id, client=None):
+        synced.append((tdl.tdl_id, actor_id))
+        return tdl
+
+    class ActiveCorrectionAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=datetime(2026, 5, 22, 0, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria="每个人摸完后都有完成的表格",
+                confidence=0.92,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_open_tdl_from_follow_up",
+        fake_update_open_tdl_from_follow_up,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.sync_calendar_due_at_change_best_effort",
+        fake_sync_calendar_due_at_change_best_effort,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-active-fields",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才那条时间不是今天，是明天，而且完成标准是每个人摸完后都有完成的表格",
+        ),
+        ActiveCorrectionAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert "2026-05-22 18:00" in card.body[1]
+    assert active_tdl.completion_criteria == "每个人摸完后都有完成的表格"
+    assert synced == [(active_tdl.tdl_id, "0617564550-1513038363")]
+
+
+@pytest.mark.asyncio
 async def test_intake_overwrites_due_at_from_explicit_correction(monkeypatch) -> None:
     session = FakeSession()
     draft = TDL(
