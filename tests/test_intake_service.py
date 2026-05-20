@@ -484,6 +484,213 @@ async def test_intake_updates_owner_from_correction_even_when_message_mentions_m
 
 
 @pytest.mark.asyncio
+async def test_intake_updates_owner_from_not_old_name_but_new_name_correction(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id="0962151633-1819579479",
+        due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.owner_id = payload.owner_id
+        return draft
+
+    class LowConfidenceAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=False,
+                due_at=None,
+                completion_criteria=None,
+                confidence=0.20,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-owner-from-old-to-new",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才那条负责人不是时颖，是李珍",
+        ),
+        LowConfidenceAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "负责人：李珍 / Helen" in card.body
+
+
+@pytest.mark.asyncio
+async def test_intake_overwrites_due_at_from_explicit_correction(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.due_at = payload.due_at
+        return draft
+
+    class DueCorrectionAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=datetime(2026, 5, 21, 0, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                confidence=0.93,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-due-at",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才那条时间不是今天，是明天",
+        ),
+        DueCorrectionAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "2026-05-21 18:00" in card.body[2]
+
+
+@pytest.mark.asyncio
+async def test_intake_overwrites_completion_criteria_from_explicit_correction(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 20, 18, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="形成口头反馈",
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.completion_criteria = payload.completion_criteria
+        return draft
+
+    class CriteriaCorrectionAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=None,
+                completion_criteria="形成一页结论",
+                confidence=0.94,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-criteria",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才那条完成标准改成形成一页结论",
+        ),
+        CriteriaCorrectionAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "形成一页结论" in card.body[4]
+
+
+@pytest.mark.asyncio
 async def test_intake_fuzzy_matches_assigned_owner_from_voice_transcript() -> None:
     session = FakeSession()
     card = await intake_dingtalk_message(
@@ -671,6 +878,60 @@ async def test_intake_ignores_latest_recent_draft_from_direct_text_command(monke
             sender_id="0617564550-1513038363",
             sender_nick="Frank",
             content="忽略",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已忽略草稿"
+    assert draft.status == "canceled"
+
+
+@pytest.mark.asyncio
+async def test_intake_ignores_latest_recent_draft_from_natural_cancel_command(monkeypatch) -> None:
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="前往钻石校区教团队使用 Claude",
+        owner_id="0617564550-1513038363",
+        due_at=None,
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_recent_draft(*args, **kwargs):
+        return draft
+
+    async def fake_cancel_draft_tdl(session, tdl_id, actor_id):
+        draft.status = "canceled"
+        return draft
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_draft",
+        fake_find_latest_recent_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.cancel_draft_tdl",
+        fake_cancel_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        FakeSession(),
+        DingTalkIncomingMessage(
+            message_id="msg-natural-cancel-command",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="刚才那条不用建了",
         ),
         FakeAIClient(
             TDLFieldDraft(
