@@ -4,7 +4,12 @@ from uuid import uuid4
 import pytest
 
 from app.integrations.dingtalk_card import build_card_action_id
-from app.integrations.dingtalk_stream_bot import TDLCardCallbackHandler, TDLChatbotHandler
+from app.integrations.dingtalk_stream_bot import (
+    FEEDBACK_ENTRY_HINT,
+    TDLCardCallbackHandler,
+    TDLChatbotHandler,
+    _append_feedback_entry_hint,
+)
 from app.services.dingtalk_card_callback_service import CardCallbackResult
 
 
@@ -14,6 +19,18 @@ class FakeSessionContext:
 
     async def __aexit__(self, exc_type, exc, tb):
         return None
+
+
+def test_append_feedback_entry_hint_adds_r5_fallback() -> None:
+    result = _append_feedback_entry_hint("已标记完成\n「招生方案」已完成，不再提醒")
+
+    assert result.endswith(FEEDBACK_ENTRY_HINT)
+
+
+def test_append_feedback_entry_hint_is_idempotent() -> None:
+    text = f"已标记完成\n{FEEDBACK_ENTRY_HINT}"
+
+    assert _append_feedback_entry_hint(text) == text
 
 
 @pytest.mark.asyncio

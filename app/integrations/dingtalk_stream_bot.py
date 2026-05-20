@@ -23,6 +23,7 @@ from app.services.text_action_service import handle_text_action_command
 
 
 logger = logging.getLogger(__name__)
+FEEDBACK_ENTRY_HINT = "继续处理请回到 TDL 助手私聊。"
 
 
 def _extract_message_content(message: ChatbotMessage) -> str:
@@ -133,19 +134,26 @@ class TDLCardCallbackHandler(CallbackHandler):
 async def _send_card_action_feedback(actor_id: str, text: str) -> None:
     """Send a work notification so the user sees immediate feedback after clicking a card button."""
     client = None
+    feedback_text = _append_feedback_entry_hint(text)
     try:
         from app.integrations.dingtalk_client import DingTalkClient
         client = DingTalkClient()
         await client.send_work_markdown(
             user_ids=[actor_id],
             title="TDL",
-            text=text,
+            text=feedback_text,
         )
     except Exception:
         logger.exception("Failed to send card action feedback to user=%s", actor_id)
     finally:
         if client is not None:
             await client.close()
+
+
+def _append_feedback_entry_hint(text: str) -> str:
+    if FEEDBACK_ENTRY_HINT in text:
+        return text
+    return f"{text}\n{FEEDBACK_ENTRY_HINT}"
 
 
 async def _send_template_card_response(user_id: str, card) -> bool:
