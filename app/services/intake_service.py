@@ -156,6 +156,53 @@ def _looks_like_draft_correction(source_text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in patterns)
 
 
+def _looks_like_draft_cancel(source_text: str) -> bool:
+    normalized = _normalize_direct_command(source_text)
+    if normalized in {"忽略", "取消"}:
+        return True
+    patterns = (
+        r"(刚才|上面|前面|上一条|那条).{0,12}(取消|忽略|不要了|不用建|别建)",
+        r"(取消|忽略).{0,12}(刚才|上面|前面|上一条|那条)",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _owner_id_from_correction_text(source_text: str, *, sender_id: str) -> str | None:
+    if not _looks_like_draft_correction(source_text):
+        return None
+    candidate_texts = []
+    patterns = (
+        r"(?:不是|别写成|不要写成).{1,20}?(?:而是|是|改成|换成)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})",
+        r"(?:负责人|责任人)?\s*(?:改成|改为|换成|更正为|纠正为)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})",
+        r"^是(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})$",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, source_text.strip()):
+            candidate_texts.append(match.group("name"))
+
+    resolved_ids = [
+        owner_id
+        for text in candidate_texts
+        if (owner_id := resolve_management_user_id(text, exclude_user_id=sender_id))
+    ]
+    unique_ids = set(resolved_ids)
+    if len(unique_ids) == 1:
+        return unique_ids.pop()
+    return None
+
+
+def _can_update_due_at(latest_draft, *, source_text: str, is_correction: bool) -> bool:
+    return latest_draft.due_at is None or (
+        is_correction and _has_explicit_due_reference(source_text)
+    )
+
+
+def _can_update_completion_criteria(latest_draft, *, source_text: str, is_correction: bool) -> bool:
+    return latest_draft.completion_criteria is None or (
+        is_correction and _mentions_completion_criteria(source_text)
+    )
+
+
 def _should_attempt_follow_up(
     latest_draft,
     *,
@@ -186,9 +233,10 @@ def _should_attempt_follow_up(
 def _follow_up_owner_id(source_text: str, *, sender_id: str, ai_owner_id: str | None) -> str | None:
     if ai_owner_id:
         return ai_owner_id
-    if not _looks_like_draft_correction(source_text):
-        return None
-    return resolve_management_user_id(source_text, exclude_user_id=sender_id)
+    return _owner_id_from_correction_text(source_text, sender_id=sender_id) or resolve_management_user_id(
+        source_text,
+        exclude_user_id=sender_id,
+    )
 
 
 def _normalize_direct_command(source_text: str) -> str:
@@ -202,7 +250,7 @@ async def _handle_direct_draft_command(
     max_age_minutes: int,
 ) -> TDLCard | None:
     command = _normalize_direct_command(message.content)
-    if command not in {"确认创建", "确认", "忽略", "取消"}:
+    if command not in {"确认创建", "确认"} and not _looks_like_draft_cancel(message.content):
         return None
     latest_draft = await find_latest_recent_draft(
         session,
@@ -211,7 +259,7 @@ async def _handle_direct_draft_command(
     )
     if latest_draft is None:
         return None
-    if command in {"忽略", "取消"}:
+    if _looks_like_draft_cancel(message.content):
         tdl = await cancel_draft_tdl(session, latest_draft.tdl_id, message.sender_id)
         return build_canceled_card(tdl)
     try:
@@ -246,6 +294,11 @@ async def intake_dingtalk_message(
         source_text=message.content,
         sender_id=message.sender_id,
     ):
+        is_correction = _looks_like_draft_correction(message.content)
+        deterministic_owner_id = _owner_id_from_correction_text(
+            message.content,
+            sender_id=message.sender_id,
+        )
         try:
             follow_up = await client.extract_tdl_follow_up(
                 draft_title=latest_draft.title,
@@ -253,29 +306,43 @@ async def intake_dingtalk_message(
             )
         except TDLExtractionError:
             follow_up = None
-        if (
+        has_confident_ai_follow_up = (
             follow_up is not None
             and follow_up.is_follow_up
             and follow_up.confidence
             >= float(follow_up_rules.get("minimum_confidence", 0.80))
-        ):
+        )
+        if deterministic_owner_id is not None or has_confident_ai_follow_up:
             updates = TDLDraftUpdate(
-                owner_id=_follow_up_owner_id(
-                    message.content,
-                    sender_id=message.sender_id,
-                    ai_owner_id=follow_up.owner_id,
+                owner_id=(
+                    deterministic_owner_id
+                    or _follow_up_owner_id(
+                        message.content,
+                        sender_id=message.sender_id,
+                        ai_owner_id=follow_up.owner_id if follow_up is not None else None,
+                    )
                 ),
                 due_at=(
                     _normalize_date_only_due_at(
                         follow_up.due_at,
                         source_text=message.content,
                     )
-                    if latest_draft.due_at is None
+                    if has_confident_ai_follow_up
+                    and _can_update_due_at(
+                        latest_draft,
+                        source_text=message.content,
+                        is_correction=is_correction,
+                    )
                     else None
                 ),
                 completion_criteria=(
                     follow_up.completion_criteria
-                    if latest_draft.completion_criteria is None
+                    if has_confident_ai_follow_up
+                    and _can_update_completion_criteria(
+                        latest_draft,
+                        source_text=message.content,
+                        is_correction=is_correction,
+                    )
                     else None
                 ),
             )

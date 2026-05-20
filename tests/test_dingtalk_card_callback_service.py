@@ -279,11 +279,14 @@ async def test_handle_tdl_card_callback_submits_snooze(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_handle_tdl_card_callback_defaults_snooze_without_submitted_time(monkeypatch) -> None:
     tdl_id = uuid4()
+    captured_snooze_until = None
 
     async def fake_submitter(session, *, tdl_id, actor_id, submission):
+        nonlocal captured_snooze_until
         assert session == "session"
         assert actor_id == "user-1"
         assert submission.snooze_until is not None
+        captured_snooze_until = submission.snooze_until
         return SimpleNamespace(tdl_id=tdl_id, title="招生方案终稿", status="snoozed")
 
     monkeypatch.setitem(FOLLOW_UP_SUBMITTERS, "snooze", fake_submitter)
@@ -299,7 +302,7 @@ async def test_handle_tdl_card_callback_defaults_snooze_without_submitted_time(m
     assert result.status == "snoozed"
     assert "已暂缓" in result.response_text
     assert "招生方案终稿" in result.response_text
-    assert "下次提醒：" in result.response_text
+    assert f"下次提醒：{captured_snooze_until:%Y-%m-%d %H:%M}" in result.response_text
 
 
 @pytest.mark.asyncio
