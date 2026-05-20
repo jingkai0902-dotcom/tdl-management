@@ -132,6 +132,7 @@ class TDLCardCallbackHandler(CallbackHandler):
 
 async def _send_card_action_feedback(actor_id: str, text: str) -> None:
     """Send a work notification so the user sees immediate feedback after clicking a card button."""
+    client = None
     try:
         from app.integrations.dingtalk_client import DingTalkClient
         client = DingTalkClient()
@@ -142,6 +143,9 @@ async def _send_card_action_feedback(actor_id: str, text: str) -> None:
         )
     except Exception:
         logger.exception("Failed to send card action feedback to user=%s", actor_id)
+    finally:
+        if client is not None:
+            await client.close()
 
 
 async def _send_template_card_response(user_id: str, card) -> bool:
