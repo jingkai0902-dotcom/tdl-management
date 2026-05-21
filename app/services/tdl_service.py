@@ -128,6 +128,43 @@ async def update_draft_tdl(
     return tdl
 
 
+async def update_open_tdl_from_follow_up(
+    session: AsyncSession,
+    tdl_id,
+    payload: TDLDraftUpdate,
+    actor_id: str,
+) -> TDL:
+    tdl = await _get_actionable_tdl(session, tdl_id)
+
+    updates = payload.model_dump(exclude_none=True)
+    previous = {field_name: getattr(tdl, field_name) for field_name in updates}
+    for field_name, value in updates.items():
+        setattr(tdl, field_name, value)
+
+    session.add(
+        AuditLog(
+            entity_type="tdl",
+            entity_id=str(tdl.tdl_id),
+            action="follow_up_update",
+            actor_id=actor_id,
+            payload={
+                "previous": {
+                    field_name: (
+                        value.isoformat()
+                        if isinstance(value, datetime)
+                        else value
+                    )
+                    for field_name, value in previous.items()
+                },
+                "updates": payload.model_dump(mode="json", exclude_none=True),
+            },
+        )
+    )
+    await session.commit()
+    await session.refresh(tdl)
+    return tdl
+
+
 async def confirm_ready_drafts(
     session: AsyncSession,
     tdl_ids: list,
@@ -335,6 +372,27 @@ async def find_latest_recent_draft(
             TDL.created_by == created_by,
             TDL.source == "dingtalk_msg",
             TDL.status == "draft",
+            TDL.created_at >= cutoff,
+        )
+        .order_by(TDL.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def find_latest_recent_open_tdl(
+    session: AsyncSession,
+    *,
+    created_by: str,
+    max_age_minutes: int = 15,
+) -> TDL | None:
+    cutoff = datetime.now(tz=UTC) - timedelta(minutes=max_age_minutes)
+    result = await session.execute(
+        select(TDL)
+        .where(
+            TDL.created_by == created_by,
+            TDL.source == "dingtalk_msg",
+            TDL.status.in_(ACTIONABLE_STATUSES),
             TDL.created_at >= cutoff,
         )
         .order_by(TDL.created_at.desc())

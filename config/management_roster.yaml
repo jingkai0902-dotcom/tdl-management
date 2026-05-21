@@ -28,6 +28,7 @@ management:
 
   - name: 张皓
     english_name: Allen
+    spoken_aliases: [Ellen]
     dingtalk_user_id: "2800650646785267"
     role: 励步人力经理
     shift_type: standard_shift
@@ -52,6 +53,7 @@ management:
 
   - name: 苗雅楠
     english_name: Sun
+    spoken_aliases: [伞]
     dingtalk_user_id: "021801686333412178"
     role: 斯坦校长
     shift_type: operations_shift
