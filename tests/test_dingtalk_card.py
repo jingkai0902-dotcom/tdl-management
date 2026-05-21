@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.integrations.dingtalk_card import (
+    DRAFT_FOLLOW_UP_GUIDE,
     build_card_action_id,
     build_created_card,
     build_draft_card,
@@ -38,6 +39,7 @@ def test_draft_card_contains_confirm_action() -> None:
     assert [button.action for button in card.buttons] == ["confirm", "cancel"]
     assert "负责人：user-1" in card.body
     assert "完成标准：提交最终方案" in card.body
+    assert card.body[-1] == DRAFT_FOLLOW_UP_GUIDE
 
 
 def test_draft_card_renders_known_owner_name() -> None:
@@ -47,6 +49,7 @@ def test_draft_card_renders_known_owner_name() -> None:
     card = build_draft_card(tdl)
 
     assert "负责人：荆少巍 / Frank" in card.body
+    assert DRAFT_FOLLOW_UP_GUIDE in card.body
 
 
 def test_created_card_renders_markdown() -> None:
@@ -161,6 +164,14 @@ def test_render_interactive_card_data_keeps_button_actions() -> None:
     assert result["button4Text"] == "不是我的任务"
     assert result["button4ActionId"] == build_card_action_id("reject", card.buttons[3].tdl_id)
     assert result["button4Visible"] == "true"
+
+
+def test_render_interactive_card_data_includes_draft_follow_up_guide() -> None:
+    card = build_draft_card(StubTDL("draft"))
+
+    result = render_interactive_card_data(card)
+
+    assert DRAFT_FOLLOW_UP_GUIDE in result["staticMsgContent"]
 
 
 def test_render_interactive_card_data_hides_unused_button_slots() -> None:
