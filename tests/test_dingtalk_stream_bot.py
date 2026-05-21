@@ -1,3 +1,4 @@
+import logging
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -101,6 +102,44 @@ async def test_chatbot_handler_accepts_audio_recognition_as_text(monkeypatch) ->
     assert payload == "OK"
     assert seen["content"] == "明天下午 6 点前整理续费复盘"
     assert seen["reply_card"] == {"card": "rendered"}
+
+
+@pytest.mark.asyncio
+async def test_chatbot_handler_logs_processing_metadata_without_message_content(
+    monkeypatch,
+    caplog,
+) -> None:
+    async def fake_intake(session, payload):
+        return SimpleNamespace(title="已创建 TDL", body=["done"], status="active", buttons=[])
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.render_standard_card_data",
+        lambda card, **kwargs: {"card": "rendered"},
+    )
+    monkeypatch.setattr(TDLChatbotHandler, "reply_card", lambda self, card, message: "ok")
+
+    caplog.set_level(logging.INFO, logger="app.integrations.dingtalk_stream_bot")
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-telemetry",
+                "text": {"content": "这是一条不应该进入日志的任务正文"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert "message_id=msg-telemetry" in caplog.text
+    assert "sender_id=user-1" in caplog.text
+    assert "path=intake" in caplog.text
+    assert "elapsed_ms=" in caplog.text
+    assert "不应该进入日志" not in caplog.text
 
 
 @pytest.mark.asyncio
