@@ -8,6 +8,7 @@ from app.models import TDL
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+DRAFT_FOLLOW_UP_GUIDE = "可直接回复“改成李珍”“时间改到下周五”“完成标准是形成一页结论”来修正。"
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
             f"完成标准：{tdl.completion_criteria or '[待补充]'}",
+            DRAFT_FOLLOW_UP_GUIDE,
         ],
         buttons=buttons,
         status="draft",
