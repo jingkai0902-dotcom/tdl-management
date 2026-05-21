@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from time import perf_counter
 
 import dingtalk_stream
 from dingtalk_stream import AckMessage, CallbackHandler, CardCallbackMessage
@@ -24,6 +25,7 @@ from app.services.text_action_service import handle_text_action_command
 
 logger = logging.getLogger(__name__)
 FEEDBACK_ENTRY_HINT = "继续处理请回到 TDL 助手私聊。"
+SLOW_CHATBOT_PROCESS_SECONDS = 5.0
 
 
 def _extract_message_content(message: ChatbotMessage) -> str:
@@ -45,6 +47,9 @@ def _chatbot_card_footer_lines(card) -> list[str]:
 
 class TDLChatbotHandler(ChatbotHandler):
     async def process(self, callback):
+        started_at = perf_counter()
+        processing_path = "unknown"
+        template_card_sent = False
         incoming = callback.data
         message = ChatbotMessage.from_dict(incoming) if isinstance(incoming, dict) else incoming
         content = _extract_message_content(message)
@@ -52,14 +57,23 @@ class TDLChatbotHandler(ChatbotHandler):
         if not content and isinstance(incoming, dict) and incoming.get("msgtype") == "audio":
             content = (incoming.get("content", {}) or {}).get("recognition", "")
         sender_id = getattr(message, "sender_staff_id", "") or getattr(message, "sender_id", "")
+        message_id = getattr(message, "message_id", "") or getattr(message, "conversation_id", "")
         if not sender_id:
             return AckMessage.STATUS_OK, "OK"
         if not content:
+            processing_path = "empty_content"
             self.reply_text("未能识别语音内容，请尝试用文字描述。", message)
+            _log_chatbot_process(
+                message_id=message_id,
+                sender_id=sender_id,
+                path=processing_path,
+                started_at=started_at,
+                template_card_sent=template_card_sent,
+            )
             return AckMessage.STATUS_OK, "OK"
 
         payload = DingTalkIncomingMessage(
-            message_id=getattr(message, "message_id", "") or getattr(message, "conversation_id", ""),
+            message_id=message_id,
             sender_id=sender_id,
             sender_nick=getattr(message, "sender_nick", None),
             content=content.strip(),
@@ -70,9 +84,18 @@ class TDLChatbotHandler(ChatbotHandler):
                 actor_id=payload.sender_id,
                 source_text=payload.content,
             )
+            processing_path = "text_action" if card is not None else "intake"
             if card is None:
                 card = await intake_dingtalk_message(session, payload)
-        if await _send_template_card_response(payload.sender_id, card):
+        template_card_sent = await _send_template_card_response(payload.sender_id, card)
+        if template_card_sent:
+            _log_chatbot_process(
+                message_id=payload.message_id,
+                sender_id=payload.sender_id,
+                path=processing_path,
+                started_at=started_at,
+                template_card_sent=template_card_sent,
+            )
             return AckMessage.STATUS_OK, "OK"
         card_data = render_standard_card_data(
             card,
@@ -81,6 +104,13 @@ class TDLChatbotHandler(ChatbotHandler):
         )
         if not self.reply_card(card_data, message):
             self.reply_markdown(card.title, render_markdown(card, include_actions=False), message)
+        _log_chatbot_process(
+            message_id=payload.message_id,
+            sender_id=payload.sender_id,
+            path=processing_path,
+            started_at=started_at,
+            template_card_sent=template_card_sent,
+        )
         return AckMessage.STATUS_OK, "OK"
 
 
@@ -154,6 +184,26 @@ def _append_feedback_entry_hint(text: str) -> str:
     if FEEDBACK_ENTRY_HINT in text:
         return text
     return f"{text}\n{FEEDBACK_ENTRY_HINT}"
+
+
+def _log_chatbot_process(
+    *,
+    message_id: str,
+    sender_id: str,
+    path: str,
+    started_at: float,
+    template_card_sent: bool,
+) -> None:
+    elapsed_seconds = perf_counter() - started_at
+    log = logger.warning if elapsed_seconds >= SLOW_CHATBOT_PROCESS_SECONDS else logger.info
+    log(
+        "chatbot_message_processed message_id=%s sender_id=%s path=%s elapsed_ms=%d template_card_sent=%s",
+        message_id or "-",
+        sender_id,
+        path,
+        int(elapsed_seconds * 1000),
+        template_card_sent,
+    )
 
 
 async def _send_template_card_response(user_id: str, card) -> bool:
