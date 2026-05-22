@@ -66,6 +66,10 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.tdls[0].next_actions == ["set_due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
     assert [button.action for button in result.draft_cards[0].buttons] == ["set_due_at", "cancel"]
+    assert result.summary_card is not None
+    assert result.summary_card.title == "会议任务摘要"
+    assert result.summary_card.buttons == []
+    assert result.summary_card.status == "summary"
 
 
 @pytest.mark.asyncio
@@ -141,6 +145,15 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
     assert result.owner_groups[1].owner_label == "[待补负责人]"
     assert result.owner_groups[1].ready_to_confirm_count == 0
     assert result.owner_groups[1].incomplete_count == 1
+    assert result.summary_card is not None
+    assert result.summary_card.body == [
+        "提取任务：3 条",
+        "可直接确认：2 条",
+        "待补字段：1 条",
+        "按负责人：",
+        "- 时颖 / Sherry：2 条（可确认 2 / 待补 0）",
+        "- [待补负责人]：1 条（可确认 0 / 待补 1）",
+    ]
 
 
 @pytest.mark.asyncio
