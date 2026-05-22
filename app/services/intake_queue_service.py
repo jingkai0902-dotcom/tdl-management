@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ RECEIVED = "received"
 PROCESSING = "processing"
 DONE = "done"
 FAILED = "failed"
+DEFAULT_PROCESSING_STALE_AFTER = timedelta(minutes=10)
 
 
 @dataclass(frozen=True)
@@ -67,11 +68,24 @@ async def claim_next_intake(
     session: AsyncSession,
     *,
     as_of: datetime | None = None,
+    processing_stale_after: timedelta = DEFAULT_PROCESSING_STALE_AFTER,
 ) -> IntakeQueueItem | None:
     claimed_at = as_of or datetime.now(SHANGHAI_TZ)
+    stale_cutoff = claimed_at - processing_stale_after
     result = await session.execute(
         select(IntakeQueueItem)
-        .where(IntakeQueueItem.status.in_([RECEIVED, FAILED]))
+        .where(
+            or_(
+                IntakeQueueItem.status.in_([RECEIVED, FAILED]),
+                and_(
+                    IntakeQueueItem.status == PROCESSING,
+                    or_(
+                        IntakeQueueItem.locked_at.is_(None),
+                        IntakeQueueItem.locked_at < stale_cutoff,
+                    ),
+                ),
+            )
+        )
         .where(IntakeQueueItem.attempts < IntakeQueueItem.max_attempts)
         .order_by(IntakeQueueItem.created_at.asc())
         .with_for_update(skip_locked=True)
