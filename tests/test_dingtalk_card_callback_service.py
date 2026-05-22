@@ -120,6 +120,27 @@ async def test_handle_tdl_card_callback_treats_repeated_reject_as_handled(monkey
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_returns_permission_feedback(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_complete_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("Only the current owner can receive lifecycle actions")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "complete", fake_complete_tdl)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("complete", tdl_id),
+        actor_id="other-user",
+    )
+
+    assert result.handled is False
+    assert result.action == "complete"
+    assert result.tdl_id == str(tdl_id)
+    assert "不能直接操作" in result.response_text
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() -> None:
     tdl_id = uuid4()
 

@@ -590,6 +590,56 @@ async def test_card_callback_handler_sends_follow_up_prompt(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
+async def test_card_callback_handler_sends_permission_feedback(monkeypatch) -> None:
+    tdl_id = uuid4()
+    complete_action_id = build_card_action_id("complete", tdl_id)
+    seen = {}
+
+    async def fake_handle_tdl_card_callback(session, *, action_id, actor_id, submitted_fields):
+        assert session == "session"
+        assert action_id == complete_action_id
+        assert actor_id == "other-user"
+        return CardCallbackResult(
+            handled=False,
+            action="complete",
+            tdl_id=str(tdl_id),
+            response_text="这条任务当前不是分配给你的，不能直接操作。请先让负责人更正后再处理。",
+        )
+
+    async def fake_feedback(actor_id, text):
+        seen["feedback"] = (actor_id, text)
+
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_tdl_card_callback",
+        fake_handle_tdl_card_callback,
+    )
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot._send_card_action_feedback",
+        fake_feedback,
+    )
+
+    code, payload = await TDLCardCallbackHandler().process(
+        SimpleNamespace(
+            data={
+                "userId": "other-user",
+                "content": '{"cardPrivateData":{"params":{"actionId":"'
+                + complete_action_id
+                + '"}}}',
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload["handled"] is False
+    assert payload["action"] == "complete"
+    assert seen["feedback"] == (
+        "other-user",
+        "这条任务当前不是分配给你的，不能直接操作。请先让负责人更正后再处理。",
+    )
+
+
+@pytest.mark.asyncio
 async def test_chatbot_handler_shows_confirmation_hint_for_complete_draft(monkeypatch) -> None:
     seen = {}
 
