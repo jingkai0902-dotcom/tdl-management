@@ -265,6 +265,7 @@ async def confirm_ready_drafts(
 
 async def complete_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     tdl = await _get_actionable_tdl(session, tdl_id)
+    _ensure_current_owner(tdl, actor_id)
     tdl.status = "done"
     session.add(
         AuditLog(
@@ -288,6 +289,7 @@ async def postpone_tdl(
     actor_id: str,
 ) -> TDL:
     tdl = await _get_actionable_tdl(session, tdl_id)
+    _ensure_current_owner(tdl, actor_id)
     previous_due_at = tdl.due_at
     tdl.due_at = due_at
     if tdl.status == "snoozed":
@@ -318,6 +320,7 @@ async def snooze_tdl(
     actor_id: str,
 ) -> TDL:
     tdl = await _get_actionable_tdl(session, tdl_id)
+    _ensure_current_owner(tdl, actor_id)
     tdl.status = "snoozed"
     tdl.snooze_until = snooze_until
     session.add(
@@ -336,6 +339,7 @@ async def snooze_tdl(
 
 async def request_help_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     tdl = await _get_actionable_tdl(session, tdl_id)
+    _ensure_current_owner(tdl, actor_id)
     tdl.status = "attention"
     session.add(
         AuditLog(
@@ -359,8 +363,7 @@ async def reject_tdl(
     reason: str = "owner_rejected",
 ) -> TDL:
     tdl = await _get_actionable_tdl(session, tdl_id)
-    if tdl.owner_id != actor_id:
-        raise ValueError("Only the current owner can reject an assigned TDL")
+    _ensure_current_owner(tdl, actor_id)
     tdl.status = "rejected"
     tdl.cancel_reason = reason
     session.add(
@@ -384,6 +387,11 @@ async def _get_actionable_tdl(session: AsyncSession, tdl_id) -> TDL:
     if tdl.status not in ACTIONABLE_STATUSES:
         raise ValueError("Only open TDLs can receive lifecycle actions")
     return tdl
+
+
+def _ensure_current_owner(tdl: TDL, actor_id: str) -> None:
+    if tdl.owner_id != actor_id:
+        raise ValueError("Only the current owner can receive lifecycle actions")
 
 
 async def list_tdls(session: AsyncSession) -> list[TDL]:
