@@ -125,6 +125,8 @@ TDL 资格规则：
 2. confirmed + Task 必须同时具备 what、who、when_value；缺任一项则 tdl_eligible=false。
 3. 不要猜负责人、截止时间或完成标准。原片段没有明确说出时，对应字段填空字符串。
 4. spark + Task、signal + Task 不允许。
+5. tdl_eligible=true 时，evidence_for_what、evidence_for_who、evidence_for_when 必须分别摘录原片段中支撑 what、who、when_value 的文字；不能用总结、推断或空字符串代替。
+6. 如果原片段无法分别支撑 what、who、when_value 三项证据，tdl_eligible=false。
 
 请输出单个 JSON 对象，不要附加解释。字段必须为：
 item_id, maturity, object_type, tdl_eligible, evidence_span, summary,

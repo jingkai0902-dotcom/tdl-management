@@ -33,6 +33,8 @@ def test_build_prediction_prompt_uses_gold_fragment_without_gold_answer_fields()
     assert "- maturity：pending" not in prompt
     assert "- object_type：Issue" not in prompt
     assert "- tdl_eligible：false" not in prompt
+    assert "evidence_for_what、evidence_for_who、evidence_for_when" in prompt
+    assert "分别摘录原片段中支撑 what、who、when_value 的文字" in prompt
 
 
 def test_prediction_from_payload_accepts_fenced_json() -> None:
