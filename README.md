@@ -127,6 +127,14 @@ pilot metrics timer、API health、钉钉卡片模板配置和互动卡片强制
 gold set evaluator，并开启 gate violations、false confirmed、fabricated dates
 和 deep processing errors 四个 strict 挡板。
 
+日历生成率低于目标时，可运行：
+
+```bash
+python scripts/diagnose-pilot-calendar-gaps.py
+```
+
+该脚本只读数据库，列出 open TDL 中缺少 `calendar_event_id` 的任务及最近一次日历审计归因。
+
 ## Smoke Test
 
 ```bash
