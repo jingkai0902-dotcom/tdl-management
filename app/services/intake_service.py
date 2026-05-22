@@ -154,6 +154,8 @@ def _looks_like_draft_correction(source_text: str) -> bool:
         r"(刚才|上面|前面|上一条).{0,12}(打错|说错|写错|错了|更正|纠正)",
         r"(不是|别写成|不要写成).{1,12}(是|改成|换成)",
         r"(改成|换成|更正为|纠正为)",
+        r"(刚才|上面|前面|上一条|那条).{0,12}(交给|给|由).{1,20}(负责|跟进|完成|提交|处理)?",
+        r"(负责人|责任人).{0,8}(交给|给|由|改成|改为|换成)",
         r"^是[\u4e00-\u9fa5A-Za-z]{1,20}$",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
@@ -177,6 +179,8 @@ def _owner_id_from_correction_text(source_text: str, *, sender_id: str) -> str |
     patterns = (
         r"(?:不是|别写成|不要写成).{1,20}?(?:而是|是|改成|换成)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})",
         r"(?:负责人|责任人)?\s*(?:改成|改为|换成|更正为|纠正为)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})",
+        r"(?:刚才|上面|前面|上一条|那条).{0,20}?(?:交给|给|由)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})(?:负责|跟进|完成|提交|处理|的任务)?",
+        r"(?:负责人|责任人).{0,8}?(?:交给|给|由)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})(?:负责|跟进|完成|提交|处理)?",
         r"^是(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})$",
     )
     for pattern in patterns:
