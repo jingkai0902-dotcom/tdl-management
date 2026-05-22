@@ -30,7 +30,7 @@ def parse_text_action_command(source_text: str) -> TextActionCommand | None:
         return TextActionCommand(action="complete")
     if normalized in {"不是我的任务", "不归我", "非我任务"}:
         return TextActionCommand(action="reject")
-    if normalized in {"暂缓", "延期", "稍后提醒"}:
+    if normalized in {"暂缓", "延期", "稍后提醒", "今天别吵我", "明早再提醒"}:
         return TextActionCommand(action="snooze")
 
     parsed = _parse_prefixed_command(text)
@@ -100,7 +100,7 @@ async def find_actionable_owned_tdls(session: AsyncSession, *, owner_id: str) ->
 
 def _parse_prefixed_command(text: str) -> TextActionCommand | None:
     match = re.match(
-        r"^(完成|已完成|标记完成|做完了|搞定|不是我的任务|不归我|非我任务|暂缓|延期|稍后提醒)\s*[:：,，]?\s*(.+)$",
+        r"^(完成|已完成|标记完成|做完了|搞定|不是我的任务|不归我|非我任务|暂缓|延期|稍后提醒|今天别吵我|明早再提醒)\s*[:：,，]?\s*(.+)$",
         text,
     )
     if not match:
@@ -118,6 +118,8 @@ def _parse_prefixed_command(text: str) -> TextActionCommand | None:
         "暂缓": "snooze",
         "延期": "snooze",
         "稍后提醒": "snooze",
+        "今天别吵我": "snooze",
+        "明早再提醒": "snooze",
     }[verb]
     query = _strip_snooze_time_words(query) if action == "snooze" else query
     return TextActionCommand(action=action, query=query.strip() or None)
@@ -149,7 +151,7 @@ def _resolve_target(candidates: list[TDL], query: str | None) -> TDL | TDLCard:
         "没匹配到任务",
         [
             f"没有找到标题包含“{query.strip()}”的可处理任务。",
-            "可以回复“完成：任务标题”“暂缓：任务标题”或“不是我的任务：任务标题”。",
+            "可以回复“完成：任务标题”“明早再提醒：任务标题”或“不是我的任务：任务标题”。",
         ],
     )
 

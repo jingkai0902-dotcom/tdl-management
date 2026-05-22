@@ -339,7 +339,7 @@ async def test_send_reminder_dispatches_routes_cards_to_owners() -> None:
         {
             "user_ids": ["owner-1"],
             "title": "今日待办",
-            "text": "## 今日待办\n\n测试任务\n截止：2026-05-19 02:00\n今天到期，辛苦了\n昨天完成了 0 条\n\n提示：这是一条工作通知，当前不支持在这里点击处理。交互卡片启用后会显示可点击按钮。\n临时处理方式：到 TDL 助手私聊回复“完成：任务标题”“暂缓：任务标题”或“不是我的任务：任务标题”。",
+            "text": "## 今日待办\n\n测试任务\n截止：2026-05-19 02:00\n今天到期，辛苦了\n昨天完成了 0 条\n\n提示：这是一条工作通知，当前不支持在这里点击处理。交互卡片启用后会显示可点击按钮。\n临时处理方式：到 TDL 助手私聊回复“完成：任务标题”“明早再提醒：任务标题”或“不是我的任务：任务标题”。",
         }
     ]
     assert "操作：" not in client.messages[0]["text"]
@@ -373,6 +373,7 @@ async def test_send_reminder_dispatches_uses_interactive_cards_when_configured()
     assert client.interactive_cards[0]["card_template_id"] == "template.schema"
     assert client.interactive_cards[0]["card_data"]["msgTitle"] == "今日待办"
     assert client.interactive_cards[0]["card_data"]["button1Text"] == "标记完成"
+    assert client.interactive_cards[0]["card_data"]["button2Text"] == "明早再提醒"
     assert client.interactive_cards[0]["card_data"]["button3Text"] == "不是我的任务"
     assert client.interactive_cards[0]["card_data"]["button4Visible"] == "false"
 

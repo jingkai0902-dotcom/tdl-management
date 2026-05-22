@@ -128,6 +128,7 @@ def test_due_today_card_uses_daily_reminder_actions() -> None:
     assert card.title == "今日待办"
     assert "今天到期，辛苦了" in card.body
     assert "昨天完成了 3 条" in card.body
+    assert [button.label for button in card.buttons] == ["标记完成", "明早再提醒", "不是我的任务"]
     assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
 
 
@@ -136,6 +137,7 @@ def test_day_one_reminder_card_uses_soft_reminder_copy() -> None:
 
     assert card.title == "有条任务逾期了"
     assert "可能需要看一下" in card.body
+    assert [button.label for button in card.buttons] == ["标记完成", "明早再提醒", "不是我的任务"]
 
 
 def test_day_two_reminder_card_asks_for_support() -> None:
@@ -185,7 +187,7 @@ def test_render_interactive_card_data_hides_unused_button_slots() -> None:
     result = render_interactive_card_data(card)
 
     assert result["button1Text"] == "标记完成"
-    assert result["button2Text"] == "暂缓"
+    assert result["button2Text"] == "明早再提醒"
     assert result["button3Text"] == "不是我的任务"
     assert result["button4Text"] == ""
     assert result["button4ActionId"] == ""
