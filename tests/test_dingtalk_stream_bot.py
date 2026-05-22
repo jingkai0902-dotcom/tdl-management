@@ -187,6 +187,54 @@ async def test_chatbot_handler_routes_text_action_before_intake(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
+async def test_chatbot_handler_enqueues_intake_when_async_intake_enabled(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_handle_text_action_command(*args, **kwargs):
+        return None
+
+    async def fake_enqueue(session, payload):
+        seen["enqueued"] = (session, payload.message_id, payload.sender_id, payload.content)
+        return SimpleNamespace(created=True)
+
+    async def fake_intake(*args, **kwargs):
+        raise AssertionError("async intake must not run inline extraction")
+
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.get_settings",
+        lambda: SimpleNamespace(dingtalk_async_intake_enabled=True),
+    )
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.SessionLocal", FakeSessionContext)
+    monkeypatch.setattr(
+        "app.integrations.dingtalk_stream_bot.handle_text_action_command",
+        fake_handle_text_action_command,
+    )
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.enqueue_intake_message", fake_enqueue)
+    monkeypatch.setattr("app.integrations.dingtalk_stream_bot.intake_dingtalk_message", fake_intake)
+    monkeypatch.setattr(
+        TDLChatbotHandler,
+        "reply_text",
+        lambda self, text, message: seen.setdefault("reply_text", text),
+    )
+
+    code, payload = await TDLChatbotHandler().process(
+        SimpleNamespace(
+            data={
+                "msgtype": "text",
+                "senderStaffId": "user-1",
+                "msgId": "msg-async",
+                "text": {"content": "下周三前审核暑期班方案"},
+            }
+        )
+    )
+
+    assert code == 200
+    assert payload == "OK"
+    assert seen["enqueued"] == ("session", "msg-async", "user-1", "下周三前审核暑期班方案")
+    assert seen["reply_text"] == "已收到，正在整理成 TDL 卡片。"
+
+
+@pytest.mark.asyncio
 async def test_chatbot_handler_prefers_template_card_for_actionable_cards(monkeypatch) -> None:
     seen = {}
 
