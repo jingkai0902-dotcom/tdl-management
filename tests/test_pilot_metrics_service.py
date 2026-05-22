@@ -165,13 +165,62 @@ def test_render_pilot_metrics_markdown_keeps_targets_visible() -> None:
 
 
 def test_export_script_default_period_is_week_to_date_in_shanghai() -> None:
-    script_path = Path(__file__).resolve().parents[1] / "scripts/export-daily-pilot-metrics.py"
-    spec = importlib.util.spec_from_file_location("export_daily_pilot_metrics", script_path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
+    module = _load_export_script()
 
     period_start, period_end = module._default_period(datetime(2026, 5, 22).date())
 
     assert period_start == datetime(2026, 5, 18, tzinfo=SHANGHAI_TZ)
     assert period_end == datetime(2026, 5, 23, tzinfo=SHANGHAI_TZ)
+
+
+def test_append_ledger_replaces_same_day_block(tmp_path) -> None:
+    module = _load_export_script()
+    ledger = tmp_path / "daily-pilot-metrics.md"
+    ledger.write_text("# 日常 TDL 助手试点指标\n", encoding="utf-8")
+
+    module.append_ledger(
+        ledger,
+        "## Daily Pilot Metrics\n\nfirst",
+        entry_date=datetime(2026, 5, 22).date(),
+    )
+    module.append_ledger(
+        ledger,
+        "## Daily Pilot Metrics\n\nsecond",
+        entry_date=datetime(2026, 5, 22).date(),
+    )
+
+    result = ledger.read_text(encoding="utf-8")
+    assert result.count("pilot-metrics:2026-05-22:begin") == 1
+    assert "first" not in result
+    assert "second" in result
+
+
+def test_append_ledger_adds_auto_export_heading_once(tmp_path) -> None:
+    module = _load_export_script()
+    ledger = tmp_path / "daily-pilot-metrics.md"
+    ledger.write_text("# 日常 TDL 助手试点指标\n", encoding="utf-8")
+
+    module.append_ledger(
+        ledger,
+        "## Daily Pilot Metrics\n\nfirst",
+        entry_date=datetime(2026, 5, 22).date(),
+    )
+    module.append_ledger(
+        ledger,
+        "## Daily Pilot Metrics\n\nnext",
+        entry_date=datetime(2026, 5, 23).date(),
+    )
+
+    result = ledger.read_text(encoding="utf-8")
+    assert result.count("## 自动导出记录") == 1
+    assert "pilot-metrics:2026-05-22:begin" in result
+    assert "pilot-metrics:2026-05-23:begin" in result
+
+
+def _load_export_script():
+    script_path = Path(__file__).resolve().parents[1] / "scripts/export-daily-pilot-metrics.py"
+    spec = importlib.util.spec_from_file_location("export_daily_pilot_metrics", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module

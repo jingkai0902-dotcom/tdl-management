@@ -57,6 +57,11 @@ def _parse_args() -> argparse.Namespace:
         type=datetime.fromisoformat,
         help="Exclusive period end. Overrides --date when paired with --period-start.",
     )
+    parser.add_argument(
+        "--append-ledger",
+        type=Path,
+        help="Append or replace the dated auto-export block in this Markdown ledger.",
+    )
     return parser.parse_args()
 
 
@@ -68,6 +73,40 @@ def _resolve_period(args: argparse.Namespace) -> tuple[datetime, datetime]:
     return _default_period(args.date)
 
 
+def _ledger_date(args: argparse.Namespace, period_end: datetime) -> date:
+    if args.date is not None:
+        return args.date
+    return (period_end.astimezone(SHANGHAI_TZ) - timedelta(days=1)).date()
+
+
+def append_ledger(path: Path, rendered: str, *, entry_date: date) -> None:
+    auto_heading = "## 自动导出记录"
+    marker = entry_date.isoformat()
+    begin = f"<!-- pilot-metrics:{marker}:begin -->"
+    end = f"<!-- pilot-metrics:{marker}:end -->"
+    block = "\n".join(
+        [
+            begin,
+            f"### {marker} 自动导出",
+            "",
+            rendered.rstrip(),
+            end,
+            "",
+        ]
+    )
+    original = path.read_text(encoding="utf-8") if path.exists() else "# Daily Pilot Metrics\n"
+    if begin in original and end in original:
+        prefix, rest = original.split(begin, 1)
+        _, suffix = rest.split(end, 1)
+        updated = f"{prefix}{block}{suffix.lstrip()}"
+    else:
+        separator = "" if original.endswith("\n") else "\n"
+        heading = "" if auto_heading in original else f"\n{auto_heading}\n"
+        updated = f"{original}{separator}{heading}\n{block}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(updated, encoding="utf-8")
+
+
 async def main() -> None:
     args = _parse_args()
     period_start, period_end = _resolve_period(args)
@@ -77,7 +116,15 @@ async def main() -> None:
             period_start=period_start,
             period_end=period_end,
         )
-    print(render_pilot_metrics_markdown(metrics))
+    rendered = render_pilot_metrics_markdown(metrics)
+    if args.append_ledger is not None:
+        append_ledger(
+            args.append_ledger,
+            rendered,
+            entry_date=_ledger_date(args, period_end),
+        )
+    else:
+        print(rendered)
 
 
 if __name__ == "__main__":
