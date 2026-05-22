@@ -141,6 +141,27 @@ async def test_handle_tdl_card_callback_returns_permission_feedback(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_returns_missing_fields_feedback(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    async def fake_confirm_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("TDL draft missing required fields: owner_id, due_at")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "confirm", fake_confirm_tdl)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("confirm", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is False
+    assert result.action == "confirm"
+    assert result.tdl_id == str(tdl_id)
+    assert result.response_text == "这条草稿还不能确认，请先补负责人和截止时间。"
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() -> None:
     tdl_id = uuid4()
 

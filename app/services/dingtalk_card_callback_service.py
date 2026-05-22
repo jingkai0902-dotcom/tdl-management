@@ -252,6 +252,13 @@ async def handle_tdl_card_callback(
                 tdl_id=str(tdl_id),
                 response_text="这条任务当前不是分配给你的，不能直接操作。请先让负责人更正后再处理。",
             )
+        if action == "confirm" and _is_missing_required_fields_error(exc):
+            return CardCallbackResult(
+                handled=False,
+                action=action,
+                tdl_id=str(tdl_id),
+                response_text=_missing_required_fields_feedback(exc),
+            )
         existing = await _get_existing_tdl(session, tdl_id)
         if existing is None or existing.status not in IDEMPOTENT_ACTION_STATUSES.get(action, set()):
             raise
@@ -319,6 +326,22 @@ async def _get_existing_tdl(session: AsyncSession, tdl_id) -> TDL | None:
 
 def _is_owner_permission_error(exc: ValueError) -> bool:
     return "current owner" in str(exc)
+
+
+def _is_missing_required_fields_error(exc: ValueError) -> bool:
+    return "missing required fields" in str(exc)
+
+
+def _missing_required_fields_feedback(exc: ValueError) -> str:
+    detail = str(exc)
+    missing = []
+    if "owner_id" in detail:
+        missing.append("负责人")
+    if "due_at" in detail:
+        missing.append("截止时间")
+    if not missing:
+        return "这条草稿还不能确认，请先补齐缺失字段。"
+    return f"这条草稿还不能确认，请先补{'和'.join(missing)}。"
 
 
 def _follow_up_prompt(action: str) -> str | None:
