@@ -12,6 +12,7 @@ git ls-files -z | rsync -az \
   --exclude '.env' \
   --exclude '.venv/' \
   --exclude '__pycache__/' \
+  --exclude '励步英语资料库/励步5月月度会/daily-pilot-metrics.md' \
   ./ "$REMOTE_HOST:$APP_DIR/"
 
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$REMOTE_HOST" "
