@@ -152,7 +152,7 @@ async def test_create_tdl_calendar_event_uses_openapi_token_and_union_id() -> No
         '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
         '"start":{"dateTime":"2026-05-21T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
         '"end":{"dateTime":"2026-05-21T02:00:00+08:00","timeZone":"Asia/Shanghai"},'
-        '"showMeAs":"busy","reminders":[{"method":"app","minutes":5}]}'
+        '"showMeAs":"busy","reminders":[{"method":"dingtalk","minutes":5}]}'
     )
 
 
@@ -192,7 +192,7 @@ async def test_update_tdl_calendar_event_uses_existing_event_id_with_openapi_tok
         '{"summary":"完成招生方案","description":"TDL ID: tdl-1",'
         '"start":{"dateTime":"2026-05-23T01:30:00+08:00","timeZone":"Asia/Shanghai"},'
         '"end":{"dateTime":"2026-05-23T02:00:00+08:00","timeZone":"Asia/Shanghai"},'
-        '"showMeAs":"busy","reminders":[{"method":"app","minutes":5}]}'
+        '"showMeAs":"busy","reminders":[{"method":"dingtalk","minutes":5}]}'
     )
 
 
