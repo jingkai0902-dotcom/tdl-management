@@ -13,6 +13,12 @@ ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$REMOTE_HOST" "
   systemctl is-active tdl-backend.service
   printf 'stream='
   systemctl is-active tdl-stream-bot.service
+  printf 'intake_worker='
+  systemctl is-active tdl-intake-worker.service
+  printf 'pilot_metrics_timer='
+  systemctl is-active tdl-pilot-metrics.timer
+  printf 'pilot_metrics_next='
+  systemctl show tdl-pilot-metrics.timer --property=NextElapseUSecRealtime --value
   printf 'health='
   curl -fsS http://127.0.0.1:8010/health
   printf '\n'
