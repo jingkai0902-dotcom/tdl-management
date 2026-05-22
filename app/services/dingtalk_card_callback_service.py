@@ -244,7 +244,14 @@ async def handle_tdl_card_callback(
 
     try:
         tdl = await handler(session, tdl_id, actor_id)
-    except ValueError:
+    except ValueError as exc:
+        if _is_owner_permission_error(exc):
+            return CardCallbackResult(
+                handled=False,
+                action=action,
+                tdl_id=str(tdl_id),
+                response_text="这条任务当前不是分配给你的，不能直接操作。请先让负责人更正后再处理。",
+            )
         existing = await _get_existing_tdl(session, tdl_id)
         if existing is None or existing.status not in IDEMPOTENT_ACTION_STATUSES.get(action, set()):
             raise
@@ -308,6 +315,10 @@ async def _get_existing_tdl(session: AsyncSession, tdl_id) -> TDL | None:
     if getter is None:
         return None
     return await getter(TDL, tdl_id)
+
+
+def _is_owner_permission_error(exc: ValueError) -> bool:
+    return "current owner" in str(exc)
 
 
 def _follow_up_prompt(action: str) -> str | None:
