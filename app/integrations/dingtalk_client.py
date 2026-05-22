@@ -258,7 +258,7 @@ class DingTalkClient:
             "showMeAs": "busy" if is_busy else "free",
             "reminders": [
                 {
-                    "method": "app",
+                    "method": "dingtalk",
                     "minutes": 5,
                 }
             ],
