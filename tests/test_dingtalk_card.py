@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.integrations.dingtalk_card import (
     DRAFT_FOLLOW_UP_GUIDE,
+    button_status,
     build_card_action_id,
     build_created_card,
     build_draft_card,
@@ -164,6 +165,10 @@ def test_render_interactive_card_data_keeps_button_actions() -> None:
     assert result["button4Text"] == "不是我的任务"
     assert result["button4ActionId"] == build_card_action_id("reject", card.buttons[3].tdl_id)
     assert result["button4Visible"] == "true"
+    assert result["button1Status"] == "primary"
+    assert result["button2Status"] == "normal"
+    assert result["button3Status"] == "normal"
+    assert result["button4Status"] == "normal"
 
 
 def test_render_interactive_card_data_includes_draft_follow_up_guide() -> None:
@@ -185,6 +190,16 @@ def test_render_interactive_card_data_hides_unused_button_slots() -> None:
     assert result["button4Text"] == ""
     assert result["button4ActionId"] == ""
     assert result["button4Visible"] == "false"
+    assert result["button4Status"] == "normal"
+
+
+def test_button_status_marks_only_primary_actions_primary() -> None:
+    card = build_draft_card(StubTDL("draft"))
+    cancel_button = card.buttons[-1]
+
+    assert button_status(card.buttons[0]) == "primary"
+    assert cancel_button.action == "cancel"
+    assert button_status(cancel_button) == "normal"
 
 
 def test_render_standard_card_data_keeps_button_actions() -> None:
@@ -198,6 +213,10 @@ def test_render_standard_card_data_keeps_button_actions() -> None:
         result["contents"][2]["actions"][0]["id"]
         == build_card_action_id("complete", card.buttons[0].tdl_id)
     )
+    assert result["contents"][2]["actions"][0]["status"] == "primary"
+    assert result["contents"][2]["actions"][1]["status"] == "normal"
+    assert result["contents"][2]["actions"][2]["status"] == "normal"
+    assert result["contents"][2]["actions"][3]["status"] == "normal"
 
 
 def test_render_standard_card_data_can_hide_button_actions() -> None:
