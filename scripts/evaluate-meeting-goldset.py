@@ -35,6 +35,26 @@ def main() -> int:
         help="Report format. Defaults to markdown.",
     )
     parser.add_argument("--output", help="Optional report output path")
+    parser.add_argument(
+        "--fail-on-gate-violations",
+        action="store_true",
+        help="Exit with status 1 when any evaluator gate violation is present.",
+    )
+    parser.add_argument(
+        "--fail-on-false-confirmed",
+        action="store_true",
+        help="Exit with status 1 when any false confirmed item is present.",
+    )
+    parser.add_argument(
+        "--fail-on-fabricated-dates",
+        action="store_true",
+        help="Exit with status 1 when any fabricated date is present.",
+    )
+    parser.add_argument(
+        "--fail-on-deep-processing-errors",
+        action="store_true",
+        help="Exit with status 1 when any deep processing error is present.",
+    )
     args = parser.parse_args()
 
     report = evaluate_meeting_classification(
@@ -52,7 +72,21 @@ def main() -> int:
         output_path.write_text(rendered, encoding="utf-8")
     else:
         print(rendered, end="")
-    return 0
+    return _exit_code_for_report(report, args)
+
+
+def _exit_code_for_report(report: dict, args: argparse.Namespace) -> int:
+    summary = report["summary"]
+    failed = (
+        (args.fail_on_gate_violations and summary["gate_violation_count"] > 0)
+        or (args.fail_on_false_confirmed and summary["false_confirmed_count"] > 0)
+        or (args.fail_on_fabricated_dates and summary["fabricated_date_count"] > 0)
+        or (
+            args.fail_on_deep_processing_errors
+            and summary["deep_processing_error_count"] > 0
+        )
+    )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
