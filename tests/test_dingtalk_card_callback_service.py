@@ -162,6 +162,36 @@ async def test_handle_tdl_card_callback_returns_missing_fields_feedback(monkeypa
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field_name", "expected_feedback"),
+    [
+        ("owner_id", "这条草稿还不能确认，请先补负责人。"),
+        ("due_at", "这条草稿还不能确认，请先补截止时间。"),
+    ],
+)
+async def test_handle_tdl_card_callback_returns_single_missing_field_feedback(
+    monkeypatch,
+    field_name,
+    expected_feedback,
+) -> None:
+    tdl_id = uuid4()
+
+    async def fake_confirm_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError(f"TDL draft missing required fields: {field_name}")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "confirm", fake_confirm_tdl)
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("confirm", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is False
+    assert result.response_text == expected_feedback
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_ignores_actions_needing_extra_input() -> None:
     tdl_id = uuid4()
 
