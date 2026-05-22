@@ -1,0 +1,10 @@
+[Unit]
+Description=Run TDL Daily Pilot Metrics Export
+
+[Timer]
+OnCalendar=*-*-* 23:50:00
+Persistent=true
+Unit=tdl-pilot-metrics.service
+
+[Install]
+WantedBy=timers.target
