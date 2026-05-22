@@ -80,9 +80,19 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
             owner_id="0962151633-1819579479",
             due_at=datetime(2026, 5, 31, 18, 0, tzinfo=UTC),
             status="draft",
-            priority="P2",
+            priority="P1",
             source="meeting_minutes",
             completion_criteria="形成正式 SOP",
+        )
+        later_tdl = SimpleNamespace(
+            tdl_id=uuid4(),
+            title="整理续费数据",
+            owner_id="0962151633-1819579479",
+            due_at=datetime(2026, 6, 2, 18, 0, tzinfo=UTC),
+            status="draft",
+            priority="P2",
+            source="meeting_minutes",
+            completion_criteria="形成数据表",
         )
         incomplete_tdl = SimpleNamespace(
             tdl_id=uuid4(),
@@ -94,7 +104,7 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
             source="meeting_minutes",
             completion_criteria=None,
         )
-        return meeting, [], [complete_tdl, incomplete_tdl]
+        return meeting, [], [later_tdl, incomplete_tdl, complete_tdl]
 
     monkeypatch.setattr(
         "app.api.meetings.parse_meeting_minutes",
@@ -110,14 +120,27 @@ async def test_parse_meeting_minutes_endpoint_groups_ready_and_incomplete_tdls(m
         session=None,
     )
 
-    assert result.ready_to_confirm_count == 1
+    assert result.ready_to_confirm_count == 2
     assert result.incomplete_count == 1
-    assert len(result.ready_to_confirm_tdls) == 1
+    assert len(result.ready_to_confirm_tdls) == 2
     assert len(result.incomplete_tdls) == 1
     assert result.ready_to_confirm_tdls[0].next_actions == ["confirm"]
     assert result.incomplete_tdls[0].next_actions == ["set_owner", "set_due_at"]
     assert result.incomplete_tdls[0].recommended_fields == ["completion_criteria"]
     assert result.incomplete_tdls[0].recommended_actions == ["set_completion_criteria"]
+    assert [(group.owner_id, group.tdl_count) for group in result.owner_groups] == [
+        ("0962151633-1819579479", 2),
+        (None, 1),
+    ]
+    assert result.owner_groups[0].ready_to_confirm_count == 2
+    assert result.owner_groups[0].incomplete_count == 0
+    assert [tdl.title for tdl in result.owner_groups[0].tdls] == [
+        "完成市场 SOP",
+        "整理续费数据",
+    ]
+    assert result.owner_groups[1].owner_label == "[待补负责人]"
+    assert result.owner_groups[1].ready_to_confirm_count == 0
+    assert result.owner_groups[1].incomplete_count == 1
 
 
 @pytest.mark.asyncio
