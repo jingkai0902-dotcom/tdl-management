@@ -15,3 +15,8 @@
 ## Verification
 
 - 
+
+## Meeting Evaluator Baseline
+
+- [ ] Not applicable
+- [ ] Ran `scripts/check-meeting-baseline.sh`
