@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.config import load_yaml_config
-from app.integrations.dingtalk_card import build_draft_card
+from app.integrations.dingtalk_card import TDLCard, build_draft_card
 from app.schemas import (
     DecisionRead,
     MeetingMinutesIngest,
@@ -29,6 +29,7 @@ def _build_meeting_parse_read(meeting, decisions, tdls) -> MeetingParseRead:
     tdl_reads = [TDLRead.from_tdl(tdl) for tdl in tdls]
     ready_to_confirm_tdls = [tdl for tdl in tdl_reads if not tdl.missing_fields]
     incomplete_tdls = [tdl for tdl in tdl_reads if tdl.missing_fields]
+    owner_groups = _build_owner_groups(tdl_reads)
     return MeetingParseRead(
         meeting_id=meeting.meeting_id,
         decision_count=len(decisions),
@@ -40,7 +41,15 @@ def _build_meeting_parse_read(meeting, decisions, tdls) -> MeetingParseRead:
         ready_to_confirm_tdls=ready_to_confirm_tdls,
         incomplete_tdls=incomplete_tdls,
         draft_cards=[TDLCardRead.model_validate(build_draft_card(tdl)) for tdl in tdls],
-        owner_groups=_build_owner_groups(tdl_reads),
+        summary_card=TDLCardRead.model_validate(
+            _build_meeting_summary_card(
+                owner_groups,
+                tdl_count=len(tdl_reads),
+                ready_to_confirm_count=len(ready_to_confirm_tdls),
+                incomplete_count=len(incomplete_tdls),
+            )
+        ),
+        owner_groups=owner_groups,
     )
 
 
@@ -88,6 +97,34 @@ def _owner_label(owner_id: str | None) -> str:
         if name:
             return str(name)
     return owner_id
+
+
+def _build_meeting_summary_card(
+    owner_groups: list[MeetingOwnerGroupRead],
+    *,
+    tdl_count: int,
+    ready_to_confirm_count: int,
+    incomplete_count: int,
+) -> TDLCard:
+    group_lines = [
+        (
+            f"- {group.owner_label}：{group.tdl_count} 条"
+            f"（可确认 {group.ready_to_confirm_count} / 待补 {group.incomplete_count}）"
+        )
+        for group in owner_groups
+    ] or ["- 暂无"]
+    return TDLCard(
+        title="会议任务摘要",
+        body=[
+            f"提取任务：{tdl_count} 条",
+            f"可直接确认：{ready_to_confirm_count} 条",
+            f"待补字段：{incomplete_count} 条",
+            "按负责人：",
+            *group_lines,
+        ],
+        buttons=[],
+        status="summary",
+    )
 
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)

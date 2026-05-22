@@ -192,6 +192,7 @@ class MeetingParseRead(BaseModel):
     ready_to_confirm_tdls: list[TDLRead]
     incomplete_tdls: list[TDLRead]
     draft_cards: list[TDLCardRead]
+    summary_card: TDLCardRead | None = None
     owner_groups: list["MeetingOwnerGroupRead"] = Field(default_factory=list)
 
 
