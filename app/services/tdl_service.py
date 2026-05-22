@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuditLog, TDL
 from app.schemas import BatchConfirmDraftsRead, TDLCreate, TDLDraftCreate, TDLDraftUpdate, TDLRead
+from app.services.intake_diff_service import add_intake_diff_log, tdl_payload
 
 
 ACTIONABLE_STATUSES = {"active", "attention", "snoozed"}
@@ -45,6 +46,17 @@ async def create_draft_tdl(session: AsyncSession, payload: TDLDraftCreate) -> TD
             payload=payload.model_dump(mode="json"),
         )
     )
+    if payload.source == "dingtalk_msg":
+        add_intake_diff_log(
+            session,
+            tdl=tdl,
+            action_type="draft_created",
+            source=payload.source,
+            actor_id=payload.created_by,
+            raw_text=payload.raw_text,
+            draft_payload=None,
+            confirmed_payload=tdl_payload(tdl),
+        )
     await session.commit()
     await session.refresh(tdl)
     return tdl
@@ -58,6 +70,16 @@ async def cancel_draft_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
         raise ValueError("Only draft TDLs can be canceled through draft intake")
     tdl.status = "canceled"
     tdl.cancel_reason = "draft_ignored"
+    previous = tdl_payload(tdl)
+    add_intake_diff_log(
+        session,
+        tdl=tdl,
+        action_type="canceled",
+        source=tdl.source,
+        actor_id=actor_id,
+        draft_payload=previous,
+        confirmed_payload={**previous, "status": tdl.status, "cancel_reason": tdl.cancel_reason},
+    )
     session.add(
         AuditLog(
             entity_type="tdl",
@@ -83,6 +105,7 @@ async def confirm_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
     ]
     if missing_fields:
         raise ValueError(f"TDL draft missing required fields: {', '.join(missing_fields)}")
+    previous = tdl_payload(tdl)
     tdl.status = "active"
     session.add(
         AuditLog(
@@ -92,6 +115,15 @@ async def confirm_tdl(session: AsyncSession, tdl_id, actor_id: str) -> TDL:
             actor_id=actor_id,
             payload={},
         )
+    )
+    add_intake_diff_log(
+        session,
+        tdl=tdl,
+        action_type="confirmed",
+        source=tdl.source,
+        actor_id=actor_id,
+        draft_payload=previous,
+        confirmed_payload={**tdl_payload(tdl), "status": tdl.status},
     )
     await session.commit()
     await session.refresh(tdl)
@@ -111,6 +143,7 @@ async def update_draft_tdl(
         raise ValueError("Only draft TDLs can be updated through draft completion")
 
     updates = payload.model_dump(exclude_none=True)
+    previous = tdl_payload(tdl)
     for field_name, value in updates.items():
         setattr(tdl, field_name, value)
 
@@ -123,6 +156,16 @@ async def update_draft_tdl(
             payload=payload.model_dump(mode="json", exclude_none=True),
         )
     )
+    if updates:
+        add_intake_diff_log(
+            session,
+            tdl=tdl,
+            action_type="draft_updated",
+            source=tdl.source,
+            actor_id=actor_id,
+            draft_payload=previous,
+            confirmed_payload=tdl_payload(tdl),
+        )
     await session.commit()
     await session.refresh(tdl)
     return tdl
@@ -160,6 +203,23 @@ async def update_open_tdl_from_follow_up(
             },
         )
     )
+    if updates:
+        add_intake_diff_log(
+            session,
+            tdl=tdl,
+            action_type="follow_up_updated",
+            source=tdl.source,
+            actor_id=actor_id,
+            draft_payload={
+                field_name: (
+                    value.isoformat()
+                    if isinstance(value, datetime)
+                    else value
+                )
+                for field_name, value in previous.items()
+            },
+            confirmed_payload=tdl_payload(tdl),
+        )
     await session.commit()
     await session.refresh(tdl)
     return tdl
