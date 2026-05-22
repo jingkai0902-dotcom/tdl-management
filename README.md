@@ -135,6 +135,14 @@ python scripts/diagnose-pilot-calendar-gaps.py
 
 该脚本只读数据库，列出 open TDL 中缺少 `calendar_event_id` 的任务及最近一次日历审计归因。
 
+需要提醒某个试点成员开通日历授权时，先 dry-run 预览：
+
+```bash
+python scripts/send-calendar-auth-reminder.py --user-id <dingtalk_user_id>
+```
+
+确认收件人无误后再加 `--send` 发送工作通知。
+
 ## Smoke Test
 
 ```bash
