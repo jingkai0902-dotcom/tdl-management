@@ -1,0 +1,17 @@
+[Unit]
+Description=TDL Intake Queue Worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bots/tdl/backend
+EnvironmentFile=/opt/bots/tdl/backend/.env
+Environment=PYTHONPATH=/opt/bots/tdl/backend
+ExecStart=/opt/bots/tdl/backend/.venv/bin/python scripts/run-intake-queue-worker.py
+Restart=always
+RestartSec=3
+User=tdl
+
+[Install]
+WantedBy=multi-user.target

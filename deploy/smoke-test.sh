@@ -13,5 +13,6 @@ done
 
 systemctl is-active --quiet tdl-backend.service
 systemctl is-active --quiet tdl-stream-bot.service
+systemctl is-active --quiet tdl-intake-worker.service
 echo
 echo "TDL smoke test passed"
