@@ -69,6 +69,58 @@ async def test_handle_tdl_card_callback_treats_repeated_cancel_as_handled(monkey
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_treats_repeated_confirm_as_handled(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    class SessionWithActiveTDL:
+        async def get(self, model, incoming_tdl_id):
+            assert incoming_tdl_id == tdl_id
+            return SimpleNamespace(tdl_id=tdl_id, status="active")
+
+    async def fake_confirm_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("Only draft TDLs can be confirmed")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "confirm", fake_confirm_tdl)
+
+    result = await handle_tdl_card_callback(
+        SessionWithActiveTDL(),
+        action_id=build_card_action_id("confirm", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "confirm"
+    assert result.status == "active"
+    assert "已处理" in result.response_text
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_treats_repeated_complete_as_handled(monkeypatch) -> None:
+    tdl_id = uuid4()
+
+    class SessionWithDoneTDL:
+        async def get(self, model, incoming_tdl_id):
+            assert incoming_tdl_id == tdl_id
+            return SimpleNamespace(tdl_id=tdl_id, status="done")
+
+    async def fake_complete_tdl(session, incoming_tdl_id, actor_id):
+        raise ValueError("Only open TDLs can receive lifecycle actions")
+
+    monkeypatch.setitem(ONE_CLICK_ACTIONS, "complete", fake_complete_tdl)
+
+    result = await handle_tdl_card_callback(
+        SessionWithDoneTDL(),
+        action_id=build_card_action_id("complete", tdl_id),
+        actor_id="user-1",
+    )
+
+    assert result.handled is True
+    assert result.action == "complete"
+    assert result.status == "done"
+    assert "已处理" in result.response_text
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_routes_reject(monkeypatch) -> None:
     tdl_id = uuid4()
 
