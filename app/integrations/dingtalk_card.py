@@ -136,7 +136,7 @@ def build_reminder_card(
             ],
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
-                CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+                CardButton(label="明早再提醒", action="snooze", tdl_id=tdl.tdl_id),
                 CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
             ],
             status=tdl.status,
@@ -151,7 +151,7 @@ def build_reminder_card(
             ],
             buttons=[
                 CardButton(label="标记完成", action="complete", tdl_id=tdl.tdl_id),
-                CardButton(label="暂缓", action="snooze", tdl_id=tdl.tdl_id),
+                CardButton(label="明早再提醒", action="snooze", tdl_id=tdl.tdl_id),
                 CardButton(label="不是我的任务", action="reject", tdl_id=tdl.tdl_id),
             ],
             status=tdl.status,

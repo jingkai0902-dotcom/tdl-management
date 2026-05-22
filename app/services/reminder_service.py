@@ -245,7 +245,7 @@ def _render_non_interactive_reminder(card: TDLCardRead) -> str:
             render_markdown(card, include_actions=False),
             "",
             "提示：这是一条工作通知，当前不支持在这里点击处理。交互卡片启用后会显示可点击按钮。",
-            "临时处理方式：到 TDL 助手私聊回复“完成：任务标题”“暂缓：任务标题”或“不是我的任务：任务标题”。",
+            "临时处理方式：到 TDL 助手私聊回复“完成：任务标题”“明早再提醒：任务标题”或“不是我的任务：任务标题”。",
         ]
     )
 

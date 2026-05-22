@@ -24,6 +24,10 @@ def test_parse_text_action_command_exact_and_with_title() -> None:
     snooze = parse_text_action_command("暂缓：整理续费复盘")
     assert snooze.action == "snooze"
     assert snooze.query == "整理续费复盘"
+    next_morning = parse_text_action_command("明早再提醒：整理续费复盘")
+    assert next_morning.action == "snooze"
+    assert next_morning.query == "整理续费复盘"
+    assert parse_text_action_command("今天别吵我").action == "snooze"
 
 
 @pytest.mark.asyncio
