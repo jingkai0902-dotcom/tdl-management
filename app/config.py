@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     dingtalk_require_interactive_reminder_cards: bool = False
     dingtalk_oauth_scope: str = "openid Contact.User.Read Calendar.Event.Read Calendar.Event.Write"
     dingtalk_oauth_redirect_uri: str = ""
+    dingtalk_async_intake_enabled: bool = False
     public_base_url: str = ""
     scheduler_timezone: str = "Asia/Shanghai"
 

@@ -19,6 +19,7 @@ from app.integrations.dingtalk_card import (
 from app.integrations.dingtalk_client import DingTalkClient
 from app.schemas import DingTalkIncomingMessage
 from app.services.dingtalk_card_callback_service import handle_tdl_card_callback
+from app.services.intake_queue_service import enqueue_intake_message
 from app.services.intake_service import intake_dingtalk_message
 from app.services.text_action_service import handle_text_action_command
 
@@ -86,6 +87,17 @@ class TDLChatbotHandler(ChatbotHandler):
             )
             processing_path = "text_action" if card is not None else "intake"
             if card is None:
+                if get_settings().dingtalk_async_intake_enabled:
+                    await enqueue_intake_message(session, payload)
+                    self.reply_text("已收到，正在整理成 TDL 卡片。", message)
+                    _log_chatbot_process(
+                        message_id=payload.message_id,
+                        sender_id=payload.sender_id,
+                        path="intake_queue",
+                        started_at=started_at,
+                        template_card_sent=template_card_sent,
+                    )
+                    return AckMessage.STATUS_OK, "OK"
                 card = await intake_dingtalk_message(session, payload)
         template_card_sent = await _send_template_card_response(payload.sender_id, card)
         if template_card_sent:
