@@ -4,6 +4,7 @@ set -euo pipefail
 APP_DIR="/opt/bots/tdl/backend"
 BACKEND_SERVICE_PATH="/etc/systemd/system/tdl-backend.service"
 STREAM_SERVICE_PATH="/etc/systemd/system/tdl-stream-bot.service"
+INTAKE_WORKER_SERVICE_PATH="/etc/systemd/system/tdl-intake-worker.service"
 NGINX_SITE="${NGINX_SITE:-}"
 SERVICE_USER="${SERVICE_USER:-tdl}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -37,12 +38,15 @@ chmod 0640 "$APP_DIR/.env"
 
 sed "s/^User=.*/User=$SERVICE_USER/" deploy/tdl-backend.service > "$BACKEND_SERVICE_PATH"
 sed "s/^User=.*/User=$SERVICE_USER/" deploy/tdl-stream-bot.service > "$STREAM_SERVICE_PATH"
-chmod 0644 "$BACKEND_SERVICE_PATH" "$STREAM_SERVICE_PATH"
+sed "s/^User=.*/User=$SERVICE_USER/" deploy/tdl-intake-worker.service > "$INTAKE_WORKER_SERVICE_PATH"
+chmod 0644 "$BACKEND_SERVICE_PATH" "$STREAM_SERVICE_PATH" "$INTAKE_WORKER_SERVICE_PATH"
 systemctl daemon-reload
 systemctl enable tdl-backend.service
 systemctl enable tdl-stream-bot.service
+systemctl enable tdl-intake-worker.service
 systemctl restart tdl-backend.service
 systemctl restart tdl-stream-bot.service
+systemctl restart tdl-intake-worker.service
 
 if [[ -n "$NGINX_SITE" ]]; then
   if ! grep -q 'location /tdl/' "$NGINX_SITE"; then
@@ -57,3 +61,4 @@ fi
 
 systemctl status tdl-backend.service --no-pager
 systemctl status tdl-stream-bot.service --no-pager
+systemctl status tdl-intake-worker.service --no-pager
