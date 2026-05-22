@@ -60,6 +60,26 @@ def main() -> int:
         help="Optional markdown evaluation report path generated after predictions are exported.",
     )
     parser.add_argument(
+        "--fail-on-gate-violations",
+        action="store_true",
+        help="Exit with status 1 when evaluation finds any gate violation.",
+    )
+    parser.add_argument(
+        "--fail-on-false-confirmed",
+        action="store_true",
+        help="Exit with status 1 when evaluation finds any false confirmed item.",
+    )
+    parser.add_argument(
+        "--fail-on-fabricated-dates",
+        action="store_true",
+        help="Exit with status 1 when evaluation finds any fabricated date.",
+    )
+    parser.add_argument(
+        "--fail-on-deep-processing-errors",
+        action="store_true",
+        help="Exit with status 1 when evaluation finds any deep processing error.",
+    )
+    parser.add_argument(
         "--max-retries",
         type=int,
         default=3,
@@ -73,11 +93,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    asyncio.run(_run(args))
-    return 0
+    return asyncio.run(_run(args))
 
 
-async def _run(args: argparse.Namespace) -> None:
+async def _run(args: argparse.Namespace) -> int:
     gold_path = Path(args.gold)
     rows = _load_gold_rows(gold_path)
     if args.limit is not None:
@@ -126,14 +145,42 @@ async def _run(args: argparse.Namespace) -> None:
         predictions=predictions,
     )
 
-    if args.report:
+    if args.report or _has_strict_eval_flags(args):
         report = evaluate_meeting_classification(
             load_items(gold_path),
             load_items(output_path),
         )
-        report_path = Path(args.report)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_markdown_report(report), encoding="utf-8")
+        if args.report:
+            report_path = Path(args.report)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(render_markdown_report(report), encoding="utf-8")
+        if _strict_eval_failed(report, args):
+            return 1
+    return 0
+
+
+def _has_strict_eval_flags(args: argparse.Namespace) -> bool:
+    return any(
+        (
+            args.fail_on_gate_violations,
+            args.fail_on_false_confirmed,
+            args.fail_on_fabricated_dates,
+            args.fail_on_deep_processing_errors,
+        )
+    )
+
+
+def _strict_eval_failed(report: dict[str, Any], args: argparse.Namespace) -> bool:
+    summary = report["summary"]
+    return (
+        (args.fail_on_gate_violations and summary["gate_violation_count"] > 0)
+        or (args.fail_on_false_confirmed and summary["false_confirmed_count"] > 0)
+        or (args.fail_on_fabricated_dates and summary["fabricated_date_count"] > 0)
+        or (
+            args.fail_on_deep_processing_errors
+            and summary["deep_processing_error_count"] > 0
+        )
+    )
 
 
 async def _request_prediction_with_retries(
