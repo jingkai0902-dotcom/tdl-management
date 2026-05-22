@@ -103,6 +103,33 @@ def test_gate_violations_reject_tdl_eligible_non_task() -> None:
     assert report["details"]["gate_violations"][0]["code"] == "invalid_tdl_eligible"
 
 
+def test_gate_violations_require_evidence_support_for_tdl_eligible_items() -> None:
+    report = evaluate_meeting_classification(
+        [],
+        load_items_from_payload(
+            [
+                {
+                    "item_id": "tdl-1",
+                    "maturity": "confirmed",
+                    "object_type": "Task",
+                    "tdl_eligible": True,
+                    "evidence_span": "张蕾下周五前提交新师培训课表",
+                    "what": "提交新师培训课表",
+                    "who": "张蕾",
+                    "when_value": "下周五",
+                    "evidence_for_what": "提交新师培训课表",
+                    "evidence_for_who": "张蕾",
+                }
+            ]
+        ),
+    )
+
+    assert report["summary"]["gate_violation_count"] == 1
+    violation = report["details"]["gate_violations"][0]
+    assert violation["code"] == "tdl_missing_evidence_support"
+    assert "evidence_for_when" in violation["message"]
+
+
 def load_items_from_payload(rows):
     path = "/tmp/meeting-evaluator-test-predictions.json"
     with open(path, "w", encoding="utf-8") as handle:

@@ -14,6 +14,7 @@ DISALLOWED_COMBINATIONS = {
     ("signal", "Task"),
 }
 CONFIRMED_REQUIRED_FIELDS = ("what", "who", "when_value")
+TDL_EVIDENCE_FIELDS = ("evidence_for_what", "evidence_for_who", "evidence_for_when")
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,16 @@ def _collect_gate_violations(items: list[MeetingClassificationItem]) -> list[dic
                     "tdl_eligible=true requires confirmed+Task",
                 )
             )
+        if item.tdl_eligible and item.maturity == "confirmed" and item.object_type == "Task":
+            missing_evidence = _missing_tdl_evidence_fields(item)
+            if missing_evidence:
+                violations.append(
+                    _violation(
+                        item,
+                        "tdl_missing_evidence_support",
+                        f"tdl_eligible item missing {', '.join(missing_evidence)}",
+                    )
+                )
     return violations
 
 
@@ -288,6 +299,12 @@ def _missing_task_gate_fields(item: MeetingClassificationItem) -> list[str]:
         for field_name in CONFIRMED_REQUIRED_FIELDS
         if not getattr(item, field_name)
     ]
+
+
+def _missing_tdl_evidence_fields(item: MeetingClassificationItem) -> list[str]:
+    if not item.tdl_eligible:
+        return []
+    return [field_name for field_name in TDL_EVIDENCE_FIELDS if not getattr(item, field_name)]
 
 
 def _violation(item: MeetingClassificationItem, code: str, message: str) -> dict[str, str]:
