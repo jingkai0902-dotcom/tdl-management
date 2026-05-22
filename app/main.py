@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.calendar_auth import router as calendar_auth_router
 from app.api.dingtalk_webhook import router as dingtalk_router
+from app.api.entry import router as entry_router
 from app.api.health import router as health_router
 from app.api.meetings import router as meetings_router
 from app.api.reminders import router as reminders_router
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.include_router(entry_router)
 app.include_router(health_router)
 app.include_router(calendar_auth_router)
 app.include_router(tdl_router)
