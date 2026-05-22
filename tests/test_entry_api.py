@@ -12,6 +12,8 @@ async def test_tdl_entry_home_renders_dingtalk_fallback_guidance() -> None:
     assert response.status_code == 200
     assert "TDL 管理助手" in body
     assert "TDL管理助手" in body
+    assert "复制名称" in body
+    assert "navigator.clipboard.writeText" in body
     assert "/health" in body
 
 
