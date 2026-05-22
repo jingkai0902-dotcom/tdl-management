@@ -9,6 +9,7 @@ from app.models import TDL
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 DRAFT_FOLLOW_UP_GUIDE = "可直接回复“改成李珍”“时间改到下周五”“完成标准是形成一页结论”来修正。"
+PRIMARY_BUTTON_ACTIONS = {"confirm", "complete"}
 
 
 @dataclass(frozen=True)
@@ -196,11 +197,17 @@ def render_interactive_card_data(card: TDLCard) -> dict[str, str]:
             result[f"button{slot}Text"] = button.label
             result[f"button{slot}ActionId"] = build_card_action_id(button.action, button.tdl_id)
             result[f"button{slot}Visible"] = "true"
+            result[f"button{slot}Status"] = button_status(button)
         else:
             result[f"button{slot}Text"] = ""
             result[f"button{slot}ActionId"] = ""
             result[f"button{slot}Visible"] = "false"
+            result[f"button{slot}Status"] = "normal"
     return result
+
+
+def button_status(button: CardButton) -> str:
+    return "primary" if button.action in PRIMARY_BUTTON_ACTIONS else "normal"
 
 
 def render_standard_card_data(
@@ -232,7 +239,7 @@ def render_standard_card_data(
                             "id": f"tdl_button_label_{index}",
                         },
                         "actionType": "request",
-                        "status": "primary" if index == 0 else "normal",
+                        "status": button_status(button),
                         "id": build_card_action_id(button.action, button.tdl_id),
                     }
                     for index, button in enumerate(card.buttons)
