@@ -327,6 +327,7 @@ async def test_handle_tdl_card_callback_rejects_owner_outside_roster() -> None:
 
     assert result.handled is False
     assert result.next_action == "collect_owner_id"
+    assert result.response_text == "请回复负责人，例如：负责人改成李珍"
 
 
 @pytest.mark.asyncio
