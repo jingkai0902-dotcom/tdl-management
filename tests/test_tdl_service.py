@@ -257,6 +257,42 @@ async def test_request_help_marks_attention_and_writes_audit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lifecycle_actions_require_current_owner() -> None:
+    due_at = datetime(2026, 5, 20, 18, 0, tzinfo=UTC)
+
+    async def complete(session, tdl):
+        await complete_tdl(session, tdl.tdl_id, "other-user")
+
+    async def postpone(session, tdl):
+        await postpone_tdl(
+            session,
+            tdl.tdl_id,
+            due_at=datetime(2026, 5, 22, 18, 0, tzinfo=UTC),
+            actor_id="other-user",
+        )
+
+    async def snooze(session, tdl):
+        await snooze_tdl(
+            session,
+            tdl.tdl_id,
+            snooze_until=datetime(2026, 5, 21, 9, 0, tzinfo=UTC),
+            actor_id="other-user",
+        )
+
+    async def request_help(session, tdl):
+        await request_help_tdl(session, tdl.tdl_id, "other-user")
+
+    for action in (complete, postpone, snooze, request_help):
+        tdl = _active_tdl(due_at=due_at)
+        session = FakeSession(tdl)
+
+        with pytest.raises(ValueError, match="current owner"):
+            await action(session, tdl)
+
+        assert tdl.status == "active"
+
+
+@pytest.mark.asyncio
 async def test_reject_tdl_marks_rejected_with_reason() -> None:
     tdl = _active_tdl()
     session = FakeSession(tdl)
