@@ -114,7 +114,15 @@ bash deploy/deploy.sh
 ```bash
 bash scripts/tdl-prod-check.sh
 bash scripts/tdl-deploy-prod.sh
+bash scripts/check-meeting-baseline.sh
 ```
+
+`scripts/tdl-prod-check.sh` 会检查 backend、Stream bot、intake worker、
+pilot metrics timer、API health、钉钉卡片模板配置和互动卡片强制开关。
+
+`scripts/check-meeting-baseline.sh` 会用当前 DeepSeek baseline 跑会议
+gold set evaluator，并开启 gate violations、false confirmed、fabricated dates
+和 deep processing errors 四个 strict 挡板。
 
 ## Smoke Test
 
@@ -127,6 +135,8 @@ bash deploy/smoke-test.sh
 ```bash
 systemctl status tdl-backend.service --no-pager
 systemctl status tdl-stream-bot.service --no-pager
+systemctl status tdl-intake-worker.service --no-pager
+systemctl status tdl-pilot-metrics.timer --no-pager
 curl -fsS http://127.0.0.1:8010/health
 ```
 
