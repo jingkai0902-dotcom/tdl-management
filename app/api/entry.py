@@ -43,6 +43,38 @@ ENTRY_HTML = """<!doctype html>
       line-height: 1.7;
       color: #3c4658;
     }
+    .assistant {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 18px 0;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px solid #e1e7ef;
+      border-radius: 6px;
+    }
+    .assistant-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #172033;
+      overflow-wrap: anywhere;
+    }
+    button {
+      flex: 0 0 auto;
+      border: 1px solid #1d6fdc;
+      border-radius: 6px;
+      background: #1d6fdc;
+      color: #ffffff;
+      padding: 9px 12px;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    button:focus-visible {
+      outline: 3px solid #b7d5ff;
+      outline-offset: 2px;
+    }
     .status {
       margin-top: 18px;
       padding: 12px 14px;
@@ -62,9 +94,25 @@ ENTRY_HTML = """<!doctype html>
   <main>
     <h1>TDL 管理助手</h1>
     <p>这是 TDL 管理助手的钉钉网页入口。当前任务创建、确认、完成、暂缓和拒绝仍通过钉钉里的 <strong>TDL管理助手</strong> 私聊完成。</p>
-    <p>如果你是从工作通知进入这里，请回到钉钉搜索 <strong>TDL管理助手</strong>，在私聊中继续处理任务卡片。</p>
+    <p>如果你是从工作通知进入这里，请回到钉钉搜索下面这个名称，在私聊中继续处理任务卡片。</p>
+    <div class="assistant">
+      <div class="assistant-name" id="assistant-name">TDL管理助手</div>
+      <button type="button" id="copy-name">复制名称</button>
+    </div>
     <div class="status">服务状态检查：<a href="./health">/health</a></div>
   </main>
+  <script>
+    const button = document.getElementById("copy-name");
+    const name = document.getElementById("assistant-name").textContent;
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(name);
+        button.textContent = "已复制";
+      } catch {
+        button.textContent = name;
+      }
+    });
+  </script>
 </body>
 </html>"""
 
