@@ -356,6 +356,22 @@ async def test_handle_tdl_card_callback_submits_set_due_at(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_handle_tdl_card_callback_prompts_when_due_at_invalid() -> None:
+    tdl_id = uuid4()
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_due_at", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"due_at": "not-a-date"},
+    )
+
+    assert result.handled is False
+    assert result.next_action == "collect_due_at"
+    assert result.response_text == "请回复截止时间，例如：改到明天下午六点"
+
+
+@pytest.mark.asyncio
 async def test_handle_tdl_card_callback_submits_postpone(monkeypatch) -> None:
     tdl_id = uuid4()
 
@@ -456,3 +472,19 @@ async def test_handle_tdl_card_callback_submits_completion_criteria(monkeypatch)
     assert result.handled is True
     assert result.action == "set_completion_criteria"
     assert result.status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_handle_tdl_card_callback_prompts_when_completion_criteria_empty() -> None:
+    tdl_id = uuid4()
+
+    result = await handle_tdl_card_callback(
+        "session",
+        action_id=build_card_action_id("set_completion_criteria", tdl_id),
+        actor_id="user-1",
+        submitted_fields={"completion_criteria": ""},
+    )
+
+    assert result.handled is False
+    assert result.next_action == "collect_completion_criteria"
+    assert result.response_text == "请回复完成标准，例如：完成标准是列出三条动作"
