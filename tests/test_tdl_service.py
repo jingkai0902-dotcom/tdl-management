@@ -6,6 +6,7 @@ import pytest
 from app.models import TDL
 from app.schemas import TDLDraftUpdate
 from app.services.tdl_service import (
+    FOLLOW_UP_SOURCES,
     cancel_draft_tdl,
     complete_tdl,
     confirm_ready_drafts,
@@ -106,6 +107,11 @@ def test_is_follow_up_candidate_rejects_stale_drafts() -> None:
 
     assert is_follow_up_candidate(fresh, now=now, max_age_minutes=15) is True
     assert is_follow_up_candidate(stale, now=now, max_age_minutes=15) is False
+
+
+def test_follow_up_sources_include_button_validation_cards() -> None:
+    assert "dingtalk_msg" in FOLLOW_UP_SOURCES
+    assert "button_validation" in FOLLOW_UP_SOURCES
 
 
 @pytest.mark.asyncio
