@@ -691,6 +691,75 @@ async def test_intake_reassigns_existing_draft_owner_from_owner_phrase(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_intake_reassigns_existing_draft_owner_from_supplement_owner_phrase(monkeypatch) -> None:
+    session = FakeSession()
+    draft = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id="0962151633-1819579479",
+        due_at=None,
+        completion_criteria=None,
+        priority="P2",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="draft",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return draft
+
+    async def fake_update_draft_tdl(session, tdl_id, payload, actor_id):
+        draft.owner_id = payload.owner_id
+        return draft
+
+    class LowConfidenceAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=False,
+                due_at=None,
+                completion_criteria=None,
+                confidence=0.20,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_draft_tdl",
+        fake_update_draft_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-supplement-owner-phrase",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="补充说明：任务负责人为李珍，非石影",
+        ),
+        LowConfidenceAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert "负责人：李珍 / Helen" in card.body
+
+
+@pytest.mark.asyncio
 async def test_intake_updates_recent_active_tdl_from_explicit_owner_correction(monkeypatch) -> None:
     session = FakeSession()
     active_tdl = TDL(
@@ -774,6 +843,111 @@ async def test_intake_updates_recent_active_tdl_from_explicit_owner_correction(m
     assert card.title == "已创建 TDL"
     assert active_tdl.status == "active"
     assert active_tdl.owner_id == "0611436746849471"
+
+
+@pytest.mark.asyncio
+async def test_intake_does_not_create_draft_when_contextual_follow_up_has_no_target(
+    monkeypatch,
+) -> None:
+    session = FakeSession()
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        return None
+
+    class NoNewDraftAIClient(FakeAIClient):
+        async def extract_tdl_fields(self, source_text: str) -> TDLFieldDraft:
+            raise AssertionError("contextual follow-up without a target must not create a draft")
+
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=False,
+                due_at=None,
+                completion_criteria=None,
+                confidence=0.20,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-orphan-contextual-follow-up",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="补充说明：任务负责人为李珍，非石影",
+        ),
+        NoNewDraftAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "未找到可修正的 TDL"
+    assert card.status == "no_target"
+
+
+@pytest.mark.asyncio
+async def test_intake_allows_new_task_with_generic_this_task_phrase(monkeypatch) -> None:
+    session = FakeSession()
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        raise AssertionError("generic this-task phrasing should not enter no-target follow-up path")
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-generic-this-task",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="这条任务需要周五前完成",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="完成这条任务",
+                owner_id=None,
+                due_at=datetime(2026, 5, 22, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.92,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert card.status == "active"
 
 
 @pytest.mark.asyncio

@@ -113,6 +113,18 @@ def build_canceled_card(tdl: TDL) -> TDLCard:
     )
 
 
+def build_no_follow_up_target_card() -> TDLCard:
+    return TDLCard(
+        title="未找到可修正的 TDL",
+        body=[
+            "这句话看起来是在补充或纠错，但我没找到最近可修改的草稿或待办。",
+            "请回到对应任务卡片操作，或重新完整描述要创建的 TDL。",
+        ],
+        buttons=[],
+        status="no_target",
+    )
+
+
 def build_reminder_card(
     tdl: TDL,
     *,

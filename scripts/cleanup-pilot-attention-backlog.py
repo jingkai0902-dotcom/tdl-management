@@ -28,6 +28,7 @@ class CleanupCandidate:
     title: str
     reason: str
     classification: str
+    expected_status: str = "attention"
 
 
 TEST_RESIDUAL_CANDIDATES: tuple[CleanupCandidate, ...] = (
@@ -146,13 +147,33 @@ STALE_ATTENTION_CANDIDATES: tuple[CleanupCandidate, ...] = (
 )
 
 
+DRAFT_RESIDUAL_CANDIDATES: tuple[CleanupCandidate, ...] = (
+    CleanupCandidate(
+        "224f2f35-1061-414d-996b-05b13514331d",
+        "完成 Codex 草稿按钮 D1 测试",
+        "stale Codex draft button test",
+        "draft_residual",
+        "draft",
+    ),
+    CleanupCandidate(
+        "47d1e643-8dd6-4c47-9f48-932ee3a50670",
+        "补充说明：任务负责人为李珍，非石影",
+        "orphan contextual follow-up false positive before no-target guard",
+        "draft_false_positive",
+        "draft",
+    ),
+)
+
+
 def _candidates_for_category(category: str) -> tuple[CleanupCandidate, ...]:
     if category == "test-residual":
         return TEST_RESIDUAL_CANDIDATES
     if category == "stale-attention":
         return STALE_ATTENTION_CANDIDATES
+    if category == "draft-residual":
+        return DRAFT_RESIDUAL_CANDIDATES
     if category == "all":
-        return TEST_RESIDUAL_CANDIDATES + STALE_ATTENTION_CANDIDATES
+        return TEST_RESIDUAL_CANDIDATES + STALE_ATTENTION_CANDIDATES + DRAFT_RESIDUAL_CANDIDATES
     raise ValueError(f"Unsupported cleanup category: {category}")
 
 
@@ -161,16 +182,18 @@ def _cleanup_reason(category: str) -> str:
         return "pilot_test_residual_cleanup"
     if category == "stale-attention":
         return "pilot_stale_backlog_cleanup"
+    if category == "draft-residual":
+        return "pilot_draft_residual_cleanup"
     return "pilot_backlog_cleanup"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Cancel explicit allowlisted pilot attention backlog items.",
+        description="Cancel explicit allowlisted pilot backlog items.",
     )
     parser.add_argument(
         "--category",
-        choices=("test-residual", "stale-attention", "all"),
+        choices=("test-residual", "stale-attention", "draft-residual", "all"),
         default="test-residual",
         help="Allowlist category to clean. Defaults to the original test residual set.",
     )
@@ -205,9 +228,10 @@ async def cleanup_attention_backlog(*, category: str, execute: bool) -> int:
                     f"title_mismatch | {candidate.tdl_id} | expected={candidate.title} | actual={tdl.title}"
                 )
                 continue
-            if tdl.status != "attention":
+            if tdl.status != candidate.expected_status:
                 errors.append(
-                    f"status_mismatch | {candidate.tdl_id} | expected=attention | actual={tdl.status}"
+                    f"status_mismatch | {candidate.tdl_id} | "
+                    f"expected={candidate.expected_status} | actual={tdl.status}"
                 )
                 continue
             matched.append((candidate, tdl))
