@@ -38,12 +38,13 @@ class FakeSession:
         return None
 
 
-def _draft_tdl(*, owner_id=None, due_at=None) -> TDL:
+def _draft_tdl(*, owner_id=None, due_at=None, completion_criteria=None) -> TDL:
     return TDL(
         tdl_id=uuid4(),
         title="排定新师培训课表",
         owner_id=owner_id,
         due_at=due_at,
+        completion_criteria=completion_criteria,
         priority="P2",
         created_by="0617564550-1513038363",
         source="meeting_minutes",
@@ -107,6 +108,30 @@ def test_is_follow_up_candidate_rejects_stale_drafts() -> None:
 
     assert is_follow_up_candidate(fresh, now=now, max_age_minutes=15) is True
     assert is_follow_up_candidate(stale, now=now, max_age_minutes=15) is False
+
+
+def test_is_follow_up_candidate_includes_missing_owner_only_drafts() -> None:
+    now = datetime(2026, 5, 16, 12, 0, tzinfo=UTC)
+    draft = _draft_tdl(
+        owner_id=None,
+        due_at=datetime(2026, 5, 16, 18, 0, tzinfo=UTC),
+        completion_criteria="完成按钮验证记录",
+    )
+    draft.created_at = datetime(2026, 5, 16, 11, 55, tzinfo=UTC)
+
+    assert is_follow_up_candidate(draft, now=now, max_age_minutes=15) is True
+
+
+def test_is_follow_up_candidate_rejects_complete_drafts() -> None:
+    now = datetime(2026, 5, 16, 12, 0, tzinfo=UTC)
+    draft = _draft_tdl(
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 16, 18, 0, tzinfo=UTC),
+        completion_criteria="完成按钮验证记录",
+    )
+    draft.created_at = datetime(2026, 5, 16, 11, 55, tzinfo=UTC)
+
+    assert is_follow_up_candidate(draft, now=now, max_age_minutes=15) is False
 
 
 def test_follow_up_sources_include_button_validation_cards() -> None:

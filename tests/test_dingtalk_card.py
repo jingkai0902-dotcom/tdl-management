@@ -39,6 +39,7 @@ def test_draft_card_contains_confirm_action() -> None:
 
     assert card.status == "draft"
     assert [button.action for button in card.buttons] == ["confirm", "cancel"]
+    assert "主题：审核课程方案" in card.body
     assert "负责人：user-1" in card.body
     assert "完成标准：提交最终方案" in card.body
     assert card.body[-1] == DRAFT_FOLLOW_UP_GUIDE

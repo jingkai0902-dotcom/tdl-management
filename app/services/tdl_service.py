@@ -478,6 +478,10 @@ def is_follow_up_candidate(
 ) -> bool:
     if tdl is None or tdl.created_at is None:
         return False
-    if tdl.due_at is not None and tdl.completion_criteria is not None:
+    if (
+        tdl.owner_id is not None
+        and tdl.due_at is not None
+        and tdl.completion_criteria is not None
+    ):
         return False
     return tdl.created_at >= now - timedelta(minutes=max_age_minutes)
