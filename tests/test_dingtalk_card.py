@@ -58,7 +58,12 @@ def test_created_card_renders_markdown() -> None:
     card = build_created_card(StubTDL("active"))
 
     assert "已创建 TDL" in render_markdown(card)
-    assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
+    assert [button.action for button in card.buttons] == [
+        "complete",
+        "snooze",
+        "need_help",
+        "reject",
+    ]
 
 
 def test_no_follow_up_target_card_is_non_actionable_notice() -> None:
@@ -90,7 +95,7 @@ def test_draft_card_marks_missing_due_at() -> None:
     card = build_draft_card(StubTDL("draft", due_at=None))
 
     assert "截止：[待补充]" in card.body
-    assert [button.action for button in card.buttons] == ["set_due_at", "cancel"]
+    assert [button.action for button in card.buttons] == ["cancel"]
 
 
 def test_draft_card_marks_missing_owner() -> None:
@@ -100,7 +105,7 @@ def test_draft_card_marks_missing_owner() -> None:
     card = build_draft_card(tdl)
 
     assert "负责人：[待补充]" in card.body
-    assert [button.action for button in card.buttons] == ["set_owner", "cancel"]
+    assert [button.action for button in card.buttons] == ["cancel"]
 
 
 def test_draft_card_marks_all_missing_fields() -> None:
@@ -109,7 +114,7 @@ def test_draft_card_marks_all_missing_fields() -> None:
 
     card = build_draft_card(tdl)
 
-    assert [button.action for button in card.buttons] == ["set_owner", "set_due_at", "cancel"]
+    assert [button.action for button in card.buttons] == ["cancel"]
 
 
 def test_draft_card_marks_missing_completion_criteria() -> None:
@@ -119,11 +124,7 @@ def test_draft_card_marks_missing_completion_criteria() -> None:
     card = build_draft_card(tdl)
 
     assert "完成标准：[待补充]" in card.body
-    assert [button.action for button in card.buttons] == [
-        "confirm",
-        "set_completion_criteria",
-        "cancel",
-    ]
+    assert [button.action for button in card.buttons] == ["confirm", "cancel"]
 
 
 def test_due_today_card_uses_daily_reminder_actions() -> None:
@@ -191,17 +192,16 @@ def test_render_interactive_card_data_includes_draft_follow_up_guide() -> None:
 
 
 def test_render_interactive_card_data_hides_unused_button_slots() -> None:
-    card = build_reminder_card(StubTDL("active"), action="due_today", overdue_days=0)
+    card = build_draft_card(StubTDL("draft"))
 
     result = render_interactive_card_data(card)
 
-    assert result["button1Text"] == "标记完成"
-    assert result["button2Text"] == "明早再提醒"
-    assert result["button3Text"] == "不是我的任务"
-    assert result["button4Text"] == ""
-    assert result["button4ActionId"] == ""
-    assert result["button4Visible"] == "false"
-    assert result["button4Status"] == "normal"
+    assert result["button1Text"] == "确认创建"
+    assert result["button2Text"] == "忽略"
+    assert result["button3Text"] == ""
+    assert result["button3ActionId"] == ""
+    assert result["button3Visible"] == "false"
+    assert result["button3Status"] == "normal"
 
 
 def test_button_status_marks_only_primary_actions_primary() -> None:

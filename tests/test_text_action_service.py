@@ -28,6 +28,8 @@ def test_parse_text_action_command_exact_and_with_title() -> None:
     assert next_morning.action == "snooze"
     assert next_morning.query == "整理续费复盘"
     assert parse_text_action_command("今天别吵我").action == "snooze"
+    assert parse_text_action_command("延期").action == "postpone"
+    assert parse_text_action_command("延期到下周五") is None
 
 
 @pytest.mark.asyncio
@@ -139,3 +141,26 @@ async def test_handle_text_action_snoozes_until_tomorrow_morning(monkeypatch) ->
 
     assert card.title == "已暂缓"
     assert "2026-05-19 09:00" in card.body[-1]
+
+
+@pytest.mark.asyncio
+async def test_handle_text_action_prompts_for_due_at_when_postpone_has_no_time(monkeypatch) -> None:
+    candidate = _tdl("整理续费复盘")
+
+    async def fake_find_actionable_owned_tdls(session, *, owner_id):
+        return [candidate]
+
+    monkeypatch.setattr(
+        "app.services.text_action_service.find_actionable_owned_tdls",
+        fake_find_actionable_owned_tdls,
+    )
+
+    card = await handle_text_action_command(
+        "session",
+        actor_id="user-1",
+        source_text="延期",
+    )
+
+    assert card.title == "需要新的截止时间"
+    assert card.body[0] == "整理续费复盘"
+    assert "延期到下周五" in card.body[1]
