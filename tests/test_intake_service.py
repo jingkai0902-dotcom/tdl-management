@@ -866,6 +866,143 @@ async def test_intake_updates_recent_active_tdl_from_due_at_and_criteria_correct
 
 
 @pytest.mark.asyncio
+async def test_intake_updates_recent_active_tdl_from_completion_criteria_follow_up(monkeypatch) -> None:
+    session = FakeSession()
+    active_tdl = TDL(
+        tdl_id=uuid4(),
+        title="组织斯坦教学员工集体磨课",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 21, 16, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="每一位斯坦教学员工都完成了一次磨课",
+        priority="P1",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="active",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        return active_tdl
+
+    async def fake_update_open_tdl_from_follow_up(session, tdl_id, payload, actor_id):
+        active_tdl.completion_criteria = payload.completion_criteria or active_tdl.completion_criteria
+        return active_tdl
+
+    class CriteriaFollowUpAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=None,
+                completion_criteria="每一个人摸完了之后要有完成的表格",
+                confidence=0.91,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_open_tdl_from_follow_up",
+        fake_update_open_tdl_from_follow_up,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-correct-active-criteria-only",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="而且刚才完成的标准是每一个人摸完了之后要有完成的表格",
+        ),
+        CriteriaFollowUpAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert active_tdl.completion_criteria == "每一个人摸完了之后要有完成的表格"
+
+
+@pytest.mark.asyncio
+async def test_intake_does_not_update_recent_active_tdl_from_unanchored_completion_criteria(monkeypatch) -> None:
+    session = FakeSession()
+    active_tdl = TDL(
+        tdl_id=uuid4(),
+        title="组织斯坦教学员工集体磨课",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 21, 16, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="每一位斯坦教学员工都完成了一次磨课",
+        priority="P1",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="active",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        raise AssertionError("unanchored completion criteria should not enter open-TDL correction")
+
+    async def fake_update_open_tdl_from_follow_up(*args, **kwargs):
+        raise AssertionError("unanchored completion criteria should not update open TDL")
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_open_tdl_from_follow_up",
+        fake_update_open_tdl_from_follow_up,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-new-completion-criteria",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="完成标准是每一个人摸完了之后要有完成的表格",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="补充表格完成标准",
+                owner_id=None,
+                due_at=None,
+                completion_criteria="每一个人摸完了之后要有完成的表格",
+                priority="P2",
+                confidence=0.72,
+            )
+        ),
+    )
+
+    assert card.title == "TDL 草稿"
+    assert active_tdl.completion_criteria == "每一位斯坦教学员工都完成了一次磨课"
+
+
+@pytest.mark.asyncio
 async def test_intake_overwrites_due_at_from_explicit_correction(monkeypatch) -> None:
     session = FakeSession()
     draft = TDL(
