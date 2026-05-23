@@ -143,6 +143,24 @@ python scripts/diagnose-pilot-draft-outcomes.py --date 2026-05-22
 
 该脚本只读数据库，按周累计列出草稿的确认、忽略、未处理状态，以及缺失字段和最近动作。
 
+准备单个钉钉按钮真实端验证卡时，先 dry-run：
+
+```bash
+python scripts/prepare-button-validation-card.py \
+  --scenario d4-owner \
+  --run-id button-validation-YYYYMMDD
+```
+
+确认场景和接收人无误后再加 `--send`。验证结束后按 run id 清理：
+
+```bash
+python scripts/prepare-button-validation-card.py \
+  --cleanup-run-id button-validation-YYYYMMDD
+python scripts/prepare-button-validation-card.py \
+  --cleanup-run-id button-validation-YYYYMMDD \
+  --execute-cleanup
+```
+
 需要提醒某个试点成员开通日历授权时，先 dry-run 预览：
 
 ```bash
