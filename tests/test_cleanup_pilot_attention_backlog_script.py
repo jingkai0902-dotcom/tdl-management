@@ -26,11 +26,43 @@ def test_cleanup_allowlist_contains_eight_unique_test_residuals() -> None:
     assert "完成 Codex 草稿模板卡 D1 复测" in titles
 
 
+def test_cleanup_allowlist_contains_ten_unique_stale_attention_items() -> None:
+    module = _load_script()
+
+    ids = [candidate.tdl_id for candidate in module.STALE_ATTENTION_CANDIDATES]
+    titles = [candidate.title for candidate in module.STALE_ATTENTION_CANDIDATES]
+
+    assert len(ids) == 10
+    assert len(set(ids)) == 10
+    assert "前往钻石校区教授Claude使用方法" in titles
+    assert "核验薪资规则，确认三条异常" in titles
+    assert "处理家长投诉" in titles
+
+
+def test_cleanup_categories_do_not_overlap() -> None:
+    module = _load_script()
+
+    test_ids = {candidate.tdl_id for candidate in module.TEST_RESIDUAL_CANDIDATES}
+    stale_ids = {candidate.tdl_id for candidate in module.STALE_ATTENTION_CANDIDATES}
+
+    assert test_ids.isdisjoint(stale_ids)
+
+
 def test_cleanup_script_defaults_to_dry_run() -> None:
     module = _load_script()
 
     args = module.parse_args([])
 
+    assert args.execute is False
+    assert args.category == "test-residual"
+
+
+def test_cleanup_script_accepts_stale_attention_category() -> None:
+    module = _load_script()
+
+    args = module.parse_args(["--category", "stale-attention"])
+
+    assert args.category == "stale-attention"
     assert args.execute is False
 
 
