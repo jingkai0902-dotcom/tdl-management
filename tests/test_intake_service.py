@@ -1040,6 +1040,93 @@ async def test_intake_updates_recent_active_tdl_from_due_at_and_criteria_correct
 
 
 @pytest.mark.asyncio
+async def test_intake_updates_recent_active_tdl_from_postpone_to_due_at(monkeypatch) -> None:
+    session = FakeSession()
+    active_tdl = TDL(
+        tdl_id=uuid4(),
+        title="提交复盘方案",
+        owner_id="0617564550-1513038363",
+        due_at=datetime(2026, 5, 21, 16, 0, tzinfo=SHANGHAI_TZ),
+        completion_criteria="形成一页结论",
+        priority="P1",
+        created_by="0617564550-1513038363",
+        source="dingtalk_msg",
+        status="active",
+    )
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        return active_tdl
+
+    async def fake_update_open_tdl_from_follow_up(session, tdl_id, payload, actor_id):
+        active_tdl.due_at = payload.due_at or active_tdl.due_at
+        return active_tdl
+
+    synced = []
+
+    async def fake_sync_calendar_due_at_change_best_effort(session, tdl, *, actor_id, client=None):
+        synced.append((tdl.tdl_id, actor_id))
+        return tdl
+
+    class PostponeAIClient(FakeAIClient):
+        async def extract_tdl_follow_up(
+            self,
+            *,
+            draft_title: str,
+            source_text: str,
+        ) -> TDLFollowUpDraft:
+            return TDLFollowUpDraft(
+                is_follow_up=True,
+                due_at=datetime(2026, 5, 29, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                confidence=0.93,
+            )
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.update_open_tdl_from_follow_up",
+        fake_update_open_tdl_from_follow_up,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.sync_calendar_due_at_change_best_effort",
+        fake_sync_calendar_due_at_change_best_effort,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-postpone-active",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="延期到下周五",
+        ),
+        PostponeAIClient(
+            TDLFieldDraft(
+                title="不该新建",
+                owner_id=None,
+                due_at=None,
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.0,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert "2026-05-29 18:00" in card.body[1]
+    assert synced == [(active_tdl.tdl_id, "0617564550-1513038363")]
+
+
+@pytest.mark.asyncio
 async def test_intake_updates_recent_active_tdl_from_completion_criteria_follow_up(monkeypatch) -> None:
     session = FakeSession()
     active_tdl = TDL(

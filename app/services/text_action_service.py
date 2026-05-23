@@ -30,8 +30,10 @@ def parse_text_action_command(source_text: str) -> TextActionCommand | None:
         return TextActionCommand(action="complete")
     if normalized in {"不是我的任务", "不归我", "非我任务"}:
         return TextActionCommand(action="reject")
-    if normalized in {"暂缓", "延期", "稍后提醒", "今天别吵我", "明早再提醒"}:
+    if normalized in {"暂缓", "稍后提醒", "今天别吵我", "明早再提醒"}:
         return TextActionCommand(action="snooze")
+    if normalized == "延期":
+        return TextActionCommand(action="postpone")
 
     parsed = _parse_prefixed_command(text)
     if parsed is not None:
@@ -79,6 +81,14 @@ async def handle_text_action_command(
             tdl,
             extra_lines=[f"下次提醒：{snooze_until.astimezone(SHANGHAI_TZ):%Y-%m-%d %H:%M}"],
         )
+    if command.action == "postpone":
+        return _build_message_card(
+            "需要新的截止时间",
+            [
+                target.title,
+                "请直接回复新的截止时间，例如：延期到下周五，或截止改到明天下午六点。",
+            ],
+        )
     return None
 
 
@@ -100,7 +110,7 @@ async def find_actionable_owned_tdls(session: AsyncSession, *, owner_id: str) ->
 
 def _parse_prefixed_command(text: str) -> TextActionCommand | None:
     match = re.match(
-        r"^(完成|已完成|标记完成|做完了|搞定|不是我的任务|不归我|非我任务|暂缓|延期|稍后提醒|今天别吵我|明早再提醒)\s*[:：,，]?\s*(.+)$",
+        r"^(完成|已完成|标记完成|做完了|搞定|不是我的任务|不归我|非我任务|暂缓|稍后提醒|今天别吵我|明早再提醒)\s*[:：,，]?\s*(.+)$",
         text,
     )
     if not match:
@@ -116,7 +126,6 @@ def _parse_prefixed_command(text: str) -> TextActionCommand | None:
         "不归我": "reject",
         "非我任务": "reject",
         "暂缓": "snooze",
-        "延期": "snooze",
         "稍后提醒": "snooze",
         "今天别吵我": "snooze",
         "明早再提醒": "snooze",

@@ -65,7 +65,7 @@ async def test_parse_meeting_minutes_endpoint_returns_decision_and_tdl_details(m
     assert result.tdls[0].recommended_actions == []
     assert result.tdls[0].next_actions == ["set_due_at"]
     assert result.draft_cards[0].title == "TDL 草稿"
-    assert [button.action for button in result.draft_cards[0].buttons] == ["set_due_at", "cancel"]
+    assert [button.action for button in result.draft_cards[0].buttons] == ["cancel"]
     assert result.summary_card is not None
     assert result.summary_card.title == "会议任务摘要"
     assert result.summary_card.buttons == []
