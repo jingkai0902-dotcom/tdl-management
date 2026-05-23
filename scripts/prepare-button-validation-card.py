@@ -155,7 +155,7 @@ async def _create_validation_tdl(
             due_at=scenario.due_at,
             status=scenario.status,
             priority="P2",
-            source="dingtalk_msg",
+            source=VALIDATION_SOURCE,
             created_by=actor_id,
             completion_criteria=scenario.completion_criteria,
         )

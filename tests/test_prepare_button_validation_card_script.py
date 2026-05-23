@@ -4,6 +4,10 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
+from app.models import TDL
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "prepare-button-validation-card.py"
 SPEC = importlib.util.spec_from_file_location("prepare_button_validation_card", SCRIPT_PATH)
@@ -52,3 +56,39 @@ def test_parse_args_requires_explicit_cleanup_execute_flag() -> None:
     args = SCRIPT._parse_args(["--cleanup-run-id", "run-1", "--execute-cleanup"])
 
     assert args.execute_cleanup is True
+
+
+@pytest.mark.asyncio
+async def test_create_validation_tdl_marks_source_as_button_validation(monkeypatch) -> None:
+    added = []
+
+    class FakeSession:
+        def add(self, item):
+            added.append(item)
+
+        async def flush(self):
+            return None
+
+        async def commit(self):
+            return None
+
+        async def refresh(self, item):
+            return None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    monkeypatch.setattr(SCRIPT, "SessionLocal", lambda: FakeSession())
+
+    scenario = SCRIPT.scenario_for("d5-due", actor_id="frank-id")
+    tdl = await SCRIPT._create_validation_tdl(
+        scenario,
+        actor_id="frank-id",
+        run_id="run-1",
+    )
+
+    assert tdl.source == SCRIPT.VALIDATION_SOURCE
+    assert any(isinstance(item, TDL) and item.source == SCRIPT.VALIDATION_SOURCE for item in added)
