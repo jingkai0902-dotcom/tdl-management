@@ -30,6 +30,7 @@ class PilotMetrics:
     average_response_seconds: float | None
     ignored_draft_count: int
     ignore_rate: float | None
+    open_status_counts: dict[str, int]
 
 
 def _in_period(value: datetime | None, start: datetime, end: datetime) -> bool:
@@ -145,6 +146,10 @@ def build_pilot_metrics(
         ),
         ignored_draft_count=ignored_draft_count,
         ignore_rate=_ratio(ignored_draft_count, draft_created_count),
+        open_status_counts={
+            status: sum(1 for tdl in active_tdls if tdl.status == status)
+            for status in sorted(OPEN_STATUSES)
+        },
     )
 
 
@@ -197,6 +202,10 @@ def _format_seconds(value: float | None) -> str:
     return f"{value:.1f}s"
 
 
+def _format_status_mix(counts: dict[str, int]) -> str:
+    return " / ".join(f"{status} {counts.get(status, 0)}" for status in sorted(OPEN_STATUSES))
+
+
 def render_pilot_metrics_markdown(metrics: PilotMetrics) -> str:
     return "\n".join(
         [
@@ -214,6 +223,7 @@ def render_pilot_metrics_markdown(metrics: PilotMetrics) -> str:
             f"| Calendar event generation rate | "
             f"{_format_ratio(metrics.calendar_event_generation_rate)} "
             f"({metrics.active_tdl_with_calendar_count}/{metrics.active_tdl_count}) | >= 90% |",
+            f"| Open TDL status mix | {_format_status_mix(metrics.open_status_counts)} | diagnostic |",
             f"| Average response time | {_format_seconds(metrics.average_response_seconds)} | < 5s |",
             f"| Draft ignore rate | {_format_ratio(metrics.ignore_rate)} "
             f"({metrics.ignored_draft_count}/{metrics.draft_created_count}) | < 20% |",

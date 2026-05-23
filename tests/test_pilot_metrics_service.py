@@ -110,9 +110,20 @@ def test_build_pilot_metrics_counts_six_pilot_indicators() -> None:
         created_by="owner-5",
         created_at=datetime(2026, 5, 1, tzinfo=UTC),
     )
+    attention = _tdl(
+        status="attention",
+        created_by="owner-6",
+        created_at=datetime(2026, 5, 1, tzinfo=UTC),
+    )
+    snoozed = _tdl(
+        status="snoozed",
+        created_by="owner-7",
+        created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        calendar_event_id="event-2",
+    )
 
     metrics = build_pilot_metrics(
-        [created, completed, draft, canceled, outside_period],
+        [created, completed, draft, canceled, outside_period, attention, snoozed],
         [_audit(entity_id=str(completed.tdl_id), created_at=datetime(2026, 5, 20, tzinfo=UTC))],
         [
             _diff(action_type="draft_created", created_at=datetime(2026, 5, 19, tzinfo=UTC)),
@@ -141,9 +152,10 @@ def test_build_pilot_metrics_counts_six_pilot_indicators() -> None:
     assert metrics.draft_created_count == 2
     assert metrics.draft_confirmed_count == 1
     assert metrics.draft_confirmation_rate == 0.5
-    assert metrics.active_tdl_count == 2
-    assert metrics.active_tdl_with_calendar_count == 1
+    assert metrics.active_tdl_count == 4
+    assert metrics.active_tdl_with_calendar_count == 2
     assert metrics.calendar_event_generation_rate == 0.5
+    assert metrics.open_status_counts == {"active": 2, "attention": 1, "snoozed": 1}
     assert metrics.average_response_seconds == 5.0
     assert metrics.ignored_draft_count == 1
     assert metrics.ignore_rate == 0.5
@@ -207,6 +219,7 @@ def test_render_pilot_metrics_markdown_keeps_targets_visible() -> None:
     assert "## Daily Pilot Metrics" in result
     assert "| Weekly active users | 0 | >= 2 |" in result
     assert "| TDL closure rate | N/A (0/0) | >= 60% |" in result
+    assert "| Open TDL status mix | active 0 / attention 0 / snoozed 0 | diagnostic |" in result
     assert "| Average response time | N/A | < 5s |" in result
 
 
