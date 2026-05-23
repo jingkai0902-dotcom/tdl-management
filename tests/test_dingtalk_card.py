@@ -7,6 +7,7 @@ from app.integrations.dingtalk_card import (
     build_card_action_id,
     build_created_card,
     build_draft_card,
+    build_no_follow_up_target_card,
     build_reminder_card,
     parse_card_action_id,
     render_interactive_card_data,
@@ -58,6 +59,14 @@ def test_created_card_renders_markdown() -> None:
 
     assert "已创建 TDL" in render_markdown(card)
     assert [button.action for button in card.buttons] == ["complete", "snooze", "reject"]
+
+
+def test_no_follow_up_target_card_is_non_actionable_notice() -> None:
+    card = build_no_follow_up_target_card()
+
+    assert card.title == "未找到可修正的 TDL"
+    assert card.status == "no_target"
+    assert card.buttons == []
 
 
 def test_render_markdown_can_hide_non_clickable_actions() -> None:

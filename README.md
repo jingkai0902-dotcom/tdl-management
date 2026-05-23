@@ -135,6 +135,14 @@ python scripts/diagnose-pilot-calendar-gaps.py
 
 该脚本只读数据库，列出 open TDL 中缺少 `calendar_event_id` 的任务及最近一次日历审计归因。
 
+草稿确认率低或忽略率高时，可运行：
+
+```bash
+python scripts/diagnose-pilot-draft-outcomes.py --date 2026-05-22
+```
+
+该脚本只读数据库，按周累计列出草稿的确认、忽略、未处理状态，以及缺失字段和最近动作。
+
 需要提醒某个试点成员开通日历授权时，先 dry-run 预览：
 
 ```bash

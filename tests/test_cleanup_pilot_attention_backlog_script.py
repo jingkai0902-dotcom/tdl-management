@@ -39,13 +39,30 @@ def test_cleanup_allowlist_contains_ten_unique_stale_attention_items() -> None:
     assert "处理家长投诉" in titles
 
 
+def test_cleanup_allowlist_contains_two_unique_draft_residuals() -> None:
+    module = _load_script()
+
+    ids = [candidate.tdl_id for candidate in module.DRAFT_RESIDUAL_CANDIDATES]
+    titles = [candidate.title for candidate in module.DRAFT_RESIDUAL_CANDIDATES]
+    expected_statuses = {candidate.expected_status for candidate in module.DRAFT_RESIDUAL_CANDIDATES}
+
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
+    assert expected_statuses == {"draft"}
+    assert "完成 Codex 草稿按钮 D1 测试" in titles
+    assert "补充说明：任务负责人为李珍，非石影" in titles
+
+
 def test_cleanup_categories_do_not_overlap() -> None:
     module = _load_script()
 
     test_ids = {candidate.tdl_id for candidate in module.TEST_RESIDUAL_CANDIDATES}
     stale_ids = {candidate.tdl_id for candidate in module.STALE_ATTENTION_CANDIDATES}
+    draft_ids = {candidate.tdl_id for candidate in module.DRAFT_RESIDUAL_CANDIDATES}
 
     assert test_ids.isdisjoint(stale_ids)
+    assert test_ids.isdisjoint(draft_ids)
+    assert stale_ids.isdisjoint(draft_ids)
 
 
 def test_cleanup_script_defaults_to_dry_run() -> None:
@@ -63,6 +80,15 @@ def test_cleanup_script_accepts_stale_attention_category() -> None:
     args = module.parse_args(["--category", "stale-attention"])
 
     assert args.category == "stale-attention"
+    assert args.execute is False
+
+
+def test_cleanup_script_accepts_draft_residual_category() -> None:
+    module = _load_script()
+
+    args = module.parse_args(["--category", "draft-residual"])
+
+    assert args.category == "draft-residual"
     assert args.execute is False
 
 

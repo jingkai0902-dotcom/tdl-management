@@ -11,6 +11,7 @@ from app.integrations.dingtalk_card import (
     build_canceled_card,
     build_created_card,
     build_draft_card,
+    build_no_follow_up_target_card,
 )
 from app.schemas import DingTalkIncomingMessage, TDLCreate, TDLDraftCreate, TDLDraftUpdate
 from app.roster import (
@@ -157,7 +158,19 @@ def _looks_like_draft_correction(source_text: str) -> bool:
         r"(刚才|上面|前面|上一条|那条|这条|这一条).{0,20}(完成标准|完成的标准|做到什么程度|算完成|验收标准)",
         r"(刚才|上面|前面|上一条|那条).{0,12}(交给|给|由).{1,20}(负责|跟进|完成|提交|处理)?",
         r"(负责人|责任人).{0,8}(交给|给|由|改成|改为|换成)",
+        r"(任务)?(负责人|责任人).{0,4}(为|是)[\u4e00-\u9fa5A-Za-z\s._-]{1,20}.{0,8}(非|不是)",
         r"^是[\u4e00-\u9fa5A-Za-z]{1,20}$",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
+
+
+def _looks_like_contextual_follow_up(source_text: str) -> bool:
+    normalized = source_text.replace(" ", "")
+    patterns = (
+        r"(刚才|上面|前面|上一条|那条|这条|这一条)",
+        r"(补充说明|补充一下).{0,24}(负责人|责任人|完成标准|截止|时间|不是|非)",
+        r"(任务)?(负责人|责任人).{0,4}(为|是)[\u4e00-\u9fa5A-Za-z\s._-]{1,20}.{0,8}(非|不是)",
+        r"(不是|非)[\u4e00-\u9fa5A-Za-z\s._-]{1,20}的?.{0,8}是[\u4e00-\u9fa5A-Za-z\s._-]{1,20}的?任务",
     )
     return any(re.search(pattern, normalized) for pattern in patterns)
 
@@ -182,6 +195,7 @@ def _owner_id_from_correction_text(source_text: str, *, sender_id: str) -> str |
         r"(?:负责人|责任人)?\s*(?:改成|改为|换成|更正为|纠正为)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})",
         r"(?:刚才|上面|前面|上一条|那条).{0,20}?(?:交给|给|由)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})(?:负责|跟进|完成|提交|处理|的任务)?",
         r"(?:负责人|责任人).{0,8}?(?:交给|给|由)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})(?:负责|跟进|完成|提交|处理)?",
+        r"(?:任务)?(?:负责人|责任人).{0,4}(?:为|是)(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20}).{0,8}(?:非|不是)",
         r"^是(?P<name>[\u4e00-\u9fa5A-Za-z\s._-]{1,20})$",
     )
     for pattern in patterns:
@@ -432,6 +446,8 @@ async def intake_dingtalk_message(
                             actor_id=message.sender_id,
                         )
                     return build_created_card(tdl)
+        if _looks_like_contextual_follow_up(message.content):
+            return build_no_follow_up_target_card()
 
     try:
         extracted = await client.extract_tdl_fields(message.content)
