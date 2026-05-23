@@ -65,7 +65,7 @@ def build_draft_card(tdl: TDL) -> TDLCard:
     return TDLCard(
         title="TDL 草稿",
         body=[
-            tdl.title,
+            f"主题：{tdl.title}",
             f"负责人：{_format_owner(tdl.owner_id)}",
             f"截止：{_format_due_at(tdl.due_at)}",
             f"优先级：{tdl.priority}",
