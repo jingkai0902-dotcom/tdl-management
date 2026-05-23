@@ -26,6 +26,8 @@ def test_scenario_for_d4_owner_creates_missing_owner_draft() -> None:
     assert scenario.due_at is not None
     assert scenario.card_kind == "draft"
     assert "补负责人" in scenario.title
+    assert "不要点击按钮" in scenario.instruction
+    assert "负责人改成李珍" in scenario.instruction
 
 
 def test_scenario_for_a4_non_owner_targets_helen_but_sends_to_actor() -> None:
