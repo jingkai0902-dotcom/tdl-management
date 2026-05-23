@@ -1040,7 +1040,11 @@ async def test_intake_updates_recent_active_tdl_from_due_at_and_criteria_correct
 
 
 @pytest.mark.asyncio
-async def test_intake_updates_recent_active_tdl_from_postpone_to_due_at(monkeypatch) -> None:
+@pytest.mark.parametrize("source_text", ["延期到下周五", "延期下周五"])
+async def test_intake_updates_recent_active_tdl_from_postpone_to_due_at(
+    monkeypatch,
+    source_text: str,
+) -> None:
     session = FakeSession()
     active_tdl = TDL(
         tdl_id=uuid4(),
@@ -1107,7 +1111,7 @@ async def test_intake_updates_recent_active_tdl_from_postpone_to_due_at(monkeypa
             message_id="msg-postpone-active",
             sender_id="0617564550-1513038363",
             sender_nick="Frank",
-            content="延期到下周五",
+            content=source_text,
         ),
         PostponeAIClient(
             TDLFieldDraft(
