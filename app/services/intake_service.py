@@ -144,7 +144,7 @@ def _mentions_completion_criteria(source_text: str) -> bool:
     normalized = source_text.replace(" ", "")
     return any(
         token in normalized
-        for token in ("完成标准", "做到什么程度", "算完成", "验收标准")
+        for token in ("完成标准", "完成的标准", "做到什么程度", "算完成", "验收标准")
     )
 
 
@@ -154,6 +154,7 @@ def _looks_like_draft_correction(source_text: str) -> bool:
         r"(刚才|上面|前面|上一条).{0,12}(打错|说错|写错|错了|更正|纠正)",
         r"(不是|别写成|不要写成).{1,12}(是|改成|换成)",
         r"(改成|换成|更正为|纠正为)",
+        r"(刚才|上面|前面|上一条|那条|这条|这一条).{0,20}(完成标准|完成的标准|做到什么程度|算完成|验收标准)",
         r"(刚才|上面|前面|上一条|那条).{0,12}(交给|给|由).{1,20}(负责|跟进|完成|提交|处理)?",
         r"(负责人|责任人).{0,8}(交给|给|由|改成|改为|换成)",
         r"^是[\u4e00-\u9fa5A-Za-z]{1,20}$",
