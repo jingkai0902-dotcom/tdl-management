@@ -9,6 +9,7 @@ from app.services.intake_diff_service import add_intake_diff_log, tdl_payload
 
 
 ACTIONABLE_STATUSES = {"active", "attention", "snoozed"}
+FOLLOW_UP_SOURCES = {"dingtalk_msg", "button_validation"}
 
 
 async def create_tdl(session: AsyncSession, payload: TDLCreate) -> TDL:
@@ -410,7 +411,7 @@ async def find_latest_incomplete_draft(
         select(TDL)
         .where(
             TDL.created_by == created_by,
-            TDL.source == "dingtalk_msg",
+            TDL.source.in_(FOLLOW_UP_SOURCES),
             TDL.status == "draft",
             TDL.created_at >= cutoff,
         )
@@ -438,7 +439,7 @@ async def find_latest_recent_draft(
         select(TDL)
         .where(
             TDL.created_by == created_by,
-            TDL.source == "dingtalk_msg",
+            TDL.source.in_(FOLLOW_UP_SOURCES),
             TDL.status == "draft",
             TDL.created_at >= cutoff,
         )
@@ -459,7 +460,7 @@ async def find_latest_recent_open_tdl(
         select(TDL)
         .where(
             TDL.created_by == created_by,
-            TDL.source == "dingtalk_msg",
+            TDL.source.in_(FOLLOW_UP_SOURCES),
             TDL.status.in_(ACTIONABLE_STATUSES),
             TDL.created_at >= cutoff,
         )
