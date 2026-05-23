@@ -42,6 +42,32 @@ def _ratio(numerator: int, denominator: int) -> float | None:
     return numerator / denominator
 
 
+def _draft_count(
+    *,
+    intake_diff_logs: list[IntakeDiffLog],
+    audit_logs: list[AuditLog],
+    diff_action: str,
+    audit_action: str,
+    period_start: datetime,
+    period_end: datetime,
+) -> int:
+    diff_count = sum(
+        1
+        for item in intake_diff_logs
+        if item.action_type == diff_action
+        and _in_period(item.created_at, period_start, period_end)
+    )
+    if diff_count > 0:
+        return diff_count
+    return sum(
+        1
+        for audit in audit_logs
+        if audit.entity_type == "tdl"
+        and audit.action == audit_action
+        and _in_period(audit.created_at, period_start, period_end)
+    )
+
+
 def build_pilot_metrics(
     tdls: list[TDL],
     audit_logs: list[AuditLog],
@@ -64,23 +90,29 @@ def build_pilot_metrics(
         and audit.action == "complete"
         and _in_period(audit.created_at, period_start, period_end)
     }
-    draft_created_count = sum(
-        1
-        for item in intake_diff_logs
-        if item.action_type == "draft_created"
-        and _in_period(item.created_at, period_start, period_end)
+    draft_created_count = _draft_count(
+        intake_diff_logs=intake_diff_logs,
+        audit_logs=audit_logs,
+        diff_action="draft_created",
+        audit_action="draft_create",
+        period_start=period_start,
+        period_end=period_end,
     )
-    draft_confirmed_count = sum(
-        1
-        for item in intake_diff_logs
-        if item.action_type == "confirmed"
-        and _in_period(item.created_at, period_start, period_end)
+    draft_confirmed_count = _draft_count(
+        intake_diff_logs=intake_diff_logs,
+        audit_logs=audit_logs,
+        diff_action="confirmed",
+        audit_action="confirm",
+        period_start=period_start,
+        period_end=period_end,
     )
-    ignored_draft_count = sum(
-        1
-        for item in intake_diff_logs
-        if item.action_type == "canceled"
-        and _in_period(item.created_at, period_start, period_end)
+    ignored_draft_count = _draft_count(
+        intake_diff_logs=intake_diff_logs,
+        audit_logs=audit_logs,
+        diff_action="canceled",
+        audit_action="cancel",
+        period_start=period_start,
+        period_end=period_end,
     )
     active_tdls = [tdl for tdl in tdls if tdl.status in OPEN_STATUSES]
     response_seconds = [
@@ -126,7 +158,7 @@ async def generate_pilot_metrics(
     audit_result = await session.execute(
         select(AuditLog).where(
             AuditLog.entity_type == "tdl",
-            AuditLog.action == "complete",
+            AuditLog.action.in_(["complete", "draft_create", "confirm", "cancel"]),
             AuditLog.created_at >= period_start,
             AuditLog.created_at < period_end,
         )

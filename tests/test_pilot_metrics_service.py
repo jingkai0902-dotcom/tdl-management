@@ -36,11 +36,16 @@ def _tdl(
     )
 
 
-def _audit(*, entity_id: str, created_at: datetime) -> AuditLog:
+def _audit(
+    *,
+    entity_id: str,
+    created_at: datetime,
+    action: str = "complete",
+) -> AuditLog:
     return AuditLog(
         entity_type="tdl",
         entity_id=entity_id,
-        action="complete",
+        action=action,
         actor_id="owner-1",
         payload={},
         created_at=created_at,
@@ -140,6 +145,47 @@ def test_build_pilot_metrics_counts_six_pilot_indicators() -> None:
     assert metrics.active_tdl_with_calendar_count == 1
     assert metrics.calendar_event_generation_rate == 0.5
     assert metrics.average_response_seconds == 5.0
+    assert metrics.ignored_draft_count == 1
+    assert metrics.ignore_rate == 0.5
+
+
+def test_build_pilot_metrics_falls_back_to_audit_logs_for_draft_counts() -> None:
+    period_start = datetime(2026, 5, 18, tzinfo=UTC)
+    period_end = datetime(2026, 5, 25, tzinfo=UTC)
+
+    metrics = build_pilot_metrics(
+        [],
+        [
+            _audit(
+                entity_id="tdl-1",
+                action="draft_create",
+                created_at=datetime(2026, 5, 19, tzinfo=UTC),
+            ),
+            _audit(
+                entity_id="tdl-2",
+                action="draft_create",
+                created_at=datetime(2026, 5, 20, tzinfo=UTC),
+            ),
+            _audit(
+                entity_id="tdl-1",
+                action="confirm",
+                created_at=datetime(2026, 5, 20, tzinfo=UTC),
+            ),
+            _audit(
+                entity_id="tdl-2",
+                action="cancel",
+                created_at=datetime(2026, 5, 21, tzinfo=UTC),
+            ),
+        ],
+        [],
+        [],
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+    assert metrics.draft_created_count == 2
+    assert metrics.draft_confirmed_count == 1
+    assert metrics.draft_confirmation_rate == 0.5
     assert metrics.ignored_draft_count == 1
     assert metrics.ignore_rate == 0.5
 
