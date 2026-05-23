@@ -57,7 +57,7 @@ def scenario_for(key: str, *, actor_id: str) -> Scenario:
             due_at=due,
             completion_criteria="完成按钮验证记录",
             card_kind="draft",
-            instruction="点击“补负责人”，然后在私聊回复：负责人改成李珍",
+            instruction="不要点击按钮，直接在私聊回复：负责人改成李珍",
         ),
         "d5-due": Scenario(
             key=key,
@@ -67,7 +67,7 @@ def scenario_for(key: str, *, actor_id: str) -> Scenario:
             due_at=None,
             completion_criteria="完成按钮验证记录",
             card_kind="draft",
-            instruction="点击“补截止时间”，然后在私聊回复：改到明天下午六点",
+            instruction="不要点击按钮，直接在私聊回复：改到明天下午六点",
         ),
         "d6-criteria": Scenario(
             key=key,
@@ -77,7 +77,7 @@ def scenario_for(key: str, *, actor_id: str) -> Scenario:
             due_at=due,
             completion_criteria=None,
             card_kind="draft",
-            instruction="点击“补完成标准”，然后在私聊回复：完成标准是列出三条动作",
+            instruction="不要点击按钮，直接在私聊回复：完成标准是列出三条动作",
         ),
         "a4-non-owner": Scenario(
             key=key,
