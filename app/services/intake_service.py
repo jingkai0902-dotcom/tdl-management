@@ -167,7 +167,7 @@ def _looks_like_draft_correction(source_text: str) -> bool:
 def _looks_like_contextual_follow_up(source_text: str) -> bool:
     normalized = source_text.replace(" ", "")
     patterns = (
-        r"(刚才|上面|前面|上一条|那条|这条|这一条)",
+        r"(刚才|上面|前面|上一条)",
         r"(补充说明|补充一下).{0,24}(负责人|责任人|完成标准|截止|时间|不是|非)",
         r"(任务)?(负责人|责任人).{0,4}(为|是)[\u4e00-\u9fa5A-Za-z\s._-]{1,20}.{0,8}(非|不是)",
         r"(不是|非)[\u4e00-\u9fa5A-Za-z\s._-]{1,20}的?.{0,8}是[\u4e00-\u9fa5A-Za-z\s._-]{1,20}的?任务",

@@ -908,6 +908,49 @@ async def test_intake_does_not_create_draft_when_contextual_follow_up_has_no_tar
 
 
 @pytest.mark.asyncio
+async def test_intake_allows_new_task_with_generic_this_task_phrase(monkeypatch) -> None:
+    session = FakeSession()
+
+    async def fake_find_latest_incomplete_draft(*args, **kwargs):
+        return None
+
+    async def fake_find_latest_recent_open_tdl(*args, **kwargs):
+        raise AssertionError("generic this-task phrasing should not enter no-target follow-up path")
+
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_incomplete_draft",
+        fake_find_latest_incomplete_draft,
+    )
+    monkeypatch.setattr(
+        "app.services.intake_service.find_latest_recent_open_tdl",
+        fake_find_latest_recent_open_tdl,
+    )
+
+    card = await intake_dingtalk_message(
+        session,
+        DingTalkIncomingMessage(
+            message_id="msg-generic-this-task",
+            sender_id="0617564550-1513038363",
+            sender_nick="Frank",
+            content="这条任务需要周五前完成",
+        ),
+        FakeAIClient(
+            TDLFieldDraft(
+                title="完成这条任务",
+                owner_id=None,
+                due_at=datetime(2026, 5, 22, 18, 0, tzinfo=SHANGHAI_TZ),
+                completion_criteria=None,
+                priority="P2",
+                confidence=0.92,
+            )
+        ),
+    )
+
+    assert card.title == "已创建 TDL"
+    assert card.status == "active"
+
+
+@pytest.mark.asyncio
 async def test_intake_updates_recent_active_tdl_from_due_at_and_criteria_correction(monkeypatch) -> None:
     session = FakeSession()
     active_tdl = TDL(
