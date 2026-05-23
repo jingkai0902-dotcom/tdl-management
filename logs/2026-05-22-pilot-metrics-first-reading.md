@@ -67,3 +67,20 @@
    - 李珍是否需要完成一次日历授权。
    - `Unknown reminder method` 是否仍会影响新创建任务。
 4. 若后续要修复历史缺口，应先做显式 allowlist 的单条重试脚本，而不是全量 backfill。
+
+## 2026-05-23 指标口径修正
+
+PR #129 部署后，pilot metrics 在 `intake_diff_logs` 为空时会回退读取历史 `audit_logs` 中的 `draft_create`、`confirm`、`cancel`。
+
+重新只读导出 2026-05-22 指标后，原先 N/A 的两项变为：
+
+| Metric | 修正前 | 修正后 | 判断 |
+|---|---:|---:|---|
+| AI draft confirmation rate | N/A (0/0) | 20.0% (1/5) | 未达标 |
+| Draft ignore rate | N/A (0/0) | 40.0% (2/5) | 未达标 |
+
+含义：
+
+- 当前不是“没有草稿数据”，而是历史数据主要在 `audit_logs`，不在新建的 `intake_diff_logs`。
+- 草稿确认率低、忽略率高是真实试点信号，下一步应抽样查看被忽略或未确认草稿，而不是继续只看总闭环率。
+- 平均响应时间仍保持 N/A，因为 `intake_queue` 尚无数据；这需要异步 intake 路径实际启用后再评价。
