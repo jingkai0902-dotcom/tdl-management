@@ -97,3 +97,12 @@ async def test_get_workbench_view_renders_read_only_shell() -> None:
     assert "params.set(\"owner_id\", ownerId)" in body
     assert "escapeHtml(item.title)" in body
     assert "item.owner_label || item.owner_id" in body
+    assert "任务详情" in body
+    assert "只读详情" in body
+    assert "data-tdl-id" in body
+    assert "renderDetail(item)" in body
+    assert "补负责人" in body
+    assert "补截止时间" in body
+    assert "补完成标准" in body
+    assert "可确认" in body
+    assert "completion_criteria: \"完成标准\"" in body

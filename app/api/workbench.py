@@ -112,6 +112,12 @@ WORKBENCH_HTML = """<!doctype html>
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+      gap: 16px;
+      align-items: start;
+    }
     section {
       background: #ffffff;
       border: 1px solid #dfe6f0;
@@ -150,10 +156,26 @@ WORKBENCH_HTML = """<!doctype html>
       border-bottom: 0;
     }
     .task-title {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: #18202f;
+      cursor: pointer;
+      display: block;
       font-size: 15px;
       font-weight: 650;
+      line-height: 1.45;
       overflow-wrap: anywhere;
       margin-bottom: 6px;
+      padding: 0;
+      text-align: left;
+      width: 100%;
+    }
+    .task-title:hover,
+    .task-title:focus-visible {
+      color: #145da0;
+      outline: none;
+      text-decoration: underline;
     }
     .task-meta {
       display: flex;
@@ -179,13 +201,67 @@ WORKBENCH_HTML = """<!doctype html>
     .error {
       color: #b42318;
     }
+    .detail-panel {
+      background: #ffffff;
+      border: 1px solid #dfe6f0;
+      border-radius: 8px;
+      min-height: 280px;
+      overflow: hidden;
+      position: sticky;
+      top: 16px;
+    }
+    .detail-head {
+      border-bottom: 1px solid #edf1f7;
+      padding: 14px 16px;
+    }
+    .detail-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.45;
+      margin: 0 0 8px;
+      overflow-wrap: anywhere;
+    }
+    .detail-body {
+      display: grid;
+      gap: 12px;
+      padding: 14px 16px 18px;
+    }
+    .detail-row {
+      display: grid;
+      gap: 4px;
+    }
+    .detail-label {
+      color: #667085;
+      font-size: 12px;
+    }
+    .detail-value {
+      color: #18202f;
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .detail-empty {
+      color: #667085;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 18px 16px;
+    }
     @media (max-width: 820px) {
       header {
         display: block;
       }
       .status-row,
+      .workspace,
       .sections {
         grid-template-columns: 1fr;
+      }
+      .detail-panel {
+        position: static;
       }
     }
   </style>
@@ -206,8 +282,17 @@ WORKBENCH_HTML = """<!doctype html>
       <a class="scope-link" data-owner-id="0611436746849471" href="/workbench/view?owner_id=0611436746849471">Helen</a>
     </nav>
     <div class="status-row" id="stats"></div>
-    <div class="sections" id="sections">
-      <div class="loading">正在读取工作台数据...</div>
+    <div class="workspace">
+      <div class="sections" id="sections">
+        <div class="loading">正在读取工作台数据...</div>
+      </div>
+      <aside class="detail-panel" aria-label="任务详情">
+        <div class="detail-head">
+          <h2>任务详情</h2>
+          <div class="meta">只读详情 · 用于判断确认、忽略、清理或补信息</div>
+        </div>
+        <div class="detail-empty" id="detail">选择一条任务查看详情。</div>
+      </aside>
     </div>
   </main>
   <script>
@@ -228,6 +313,25 @@ WORKBENCH_HTML = """<!doctype html>
       }).format(new Date(value));
     };
 
+    const labelActions = (actions) => {
+      const labels = {
+        set_owner: "补负责人",
+        set_due_at: "补截止时间",
+        set_completion_criteria: "补完成标准",
+        confirm: "可确认",
+      };
+      return actions.map((action) => labels[action] || action);
+    };
+
+    const labelFields = (fields) => {
+      const labels = {
+        owner_id: "负责人",
+        due_at: "截止时间",
+        completion_criteria: "完成标准",
+      };
+      return fields.map((field) => labels[field] || field);
+    };
+
     const itemMeta = (item) => [
       `负责人：${item.owner_label || item.owner_id || "待补充"}`,
       `截止：${formatDate(item.due_at)}`,
@@ -235,6 +339,50 @@ WORKBENCH_HTML = """<!doctype html>
       `优先级：${item.priority}`,
       `来源：${item.source}`,
     ];
+
+    const renderPills = (values) => values.length
+      ? values.map((value) => `<span class="pill">${escapeHtml(value)}</span>`).join("")
+      : `<span class="pill">无</span>`;
+
+    const renderDetailRow = (label, value) => `
+      <div class="detail-row">
+        <div class="detail-label">${escapeHtml(label)}</div>
+        <div class="detail-value">${escapeHtml(value || "无")}</div>
+      </div>
+    `;
+
+    const renderDetail = (item) => {
+      const missingFields = labelFields(item.missing_fields || []);
+      const recommendedFields = labelFields(item.recommended_fields || []);
+      const nextActions = labelActions(item.next_actions || []);
+      const recommendedActions = labelActions(item.recommended_actions || []);
+      document.getElementById("detail").className = "detail-body";
+      document.getElementById("detail").innerHTML = `
+        <div class="detail-title">${escapeHtml(item.title)}</div>
+        ${renderDetailRow("负责人", item.owner_label || item.owner_id || "待补充")}
+        ${renderDetailRow("截止时间", formatDate(item.due_at))}
+        ${renderDetailRow("状态", item.status)}
+        ${renderDetailRow("优先级", item.priority)}
+        ${renderDetailRow("来源", item.source)}
+        ${renderDetailRow("完成标准", item.completion_criteria || "待补充")}
+        <div class="detail-row">
+          <div class="detail-label">缺失字段</div>
+          <div class="detail-actions">${renderPills(missingFields)}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">建议补充字段</div>
+          <div class="detail-actions">${renderPills(recommendedFields)}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">下一步判断</div>
+          <div class="detail-actions">${renderPills(nextActions)}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">建议动作</div>
+          <div class="detail-actions">${renderPills(recommendedActions)}</div>
+        </div>
+      `;
+    };
 
     const renderStats = (sections) => {
       document.getElementById("stats").innerHTML = sections.map((section) => `
@@ -256,7 +404,7 @@ WORKBENCH_HTML = """<!doctype html>
             section.items.length
               ? `<ul>${section.items.map((item) => `
                   <li>
-                    <div class="task-title">${escapeHtml(item.title)}</div>
+                    <button class="task-title" type="button" data-tdl-id="${escapeHtml(item.tdl_id)}">${escapeHtml(item.title)}</button>
                     <div class="task-meta">
                       ${itemMeta(item).map((meta) => `<span class="pill">${escapeHtml(meta)}</span>`).join("")}
                     </div>
@@ -266,6 +414,14 @@ WORKBENCH_HTML = """<!doctype html>
           }
         </section>
       `).join("");
+      document.querySelectorAll(".task-title").forEach((button) => {
+        button.addEventListener("click", () => {
+          const item = sections
+            .flatMap((section) => section.items)
+            .find((candidate) => candidate.tdl_id === button.dataset.tdlId);
+          if (item) renderDetail(item);
+        });
+      });
     };
 
     const ownerId = new URLSearchParams(window.location.search).get("owner_id") || "";
