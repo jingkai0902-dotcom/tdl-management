@@ -94,6 +94,7 @@ async def test_get_workbench_view_renders_read_only_shell() -> None:
     assert "同一任务可能同时出现在多个区块" in body
     assert "/workbench/view?owner_id=0617564550-1513038363" in body
     assert "/workbench/view?owner_id=0611436746849471" in body
+    assert "/workbench/meeting-review/view" in body
     assert "params.set(\"owner_id\", ownerId)" in body
     assert "escapeHtml(item.title)" in body
     assert "item.owner_label || item.owner_id" in body
