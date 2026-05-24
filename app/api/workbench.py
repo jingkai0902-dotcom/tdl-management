@@ -205,7 +205,8 @@ WORKBENCH_HTML = """<!doctype html>
       background: #ffffff;
       border: 1px solid #dfe6f0;
       border-radius: 8px;
-      min-height: 280px;
+      max-height: calc(100vh - 32px);
+      min-height: 320px;
       overflow: hidden;
       position: sticky;
       top: 16px;
@@ -224,6 +225,8 @@ WORKBENCH_HTML = """<!doctype html>
     .detail-body {
       display: grid;
       gap: 12px;
+      max-height: calc(100vh - 124px);
+      overflow-y: auto;
       padding: 14px 16px 18px;
     }
     .detail-row {
@@ -244,6 +247,35 @@ WORKBENCH_HTML = """<!doctype html>
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+    }
+    .detail-decision {
+      background: #eef6ff;
+      border: 1px solid #c9e2ff;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .detail-decision .detail-label {
+      color: #145da0;
+      font-weight: 650;
+    }
+    .detail-note {
+      color: #667085;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .detail-more {
+      border-top: 1px solid #edf1f7;
+      padding-top: 10px;
+    }
+    .detail-more summary {
+      color: #344054;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.4;
+    }
+    .detail-more[open] summary {
+      margin-bottom: 10px;
     }
     .detail-empty {
       color: #667085;
@@ -353,34 +385,33 @@ WORKBENCH_HTML = """<!doctype html>
 
     const renderDetail = (item) => {
       const missingFields = labelFields(item.missing_fields || []);
-      const recommendedFields = labelFields(item.recommended_fields || []);
       const nextActions = labelActions(item.next_actions || []);
       const recommendedActions = labelActions(item.recommended_actions || []);
+      const decisionHints = [...new Set([...nextActions, ...recommendedActions])];
       document.getElementById("detail").className = "detail-body";
       document.getElementById("detail").innerHTML = `
         <div class="detail-title">${escapeHtml(item.title)}</div>
         ${renderDetailRow("负责人", item.owner_label || item.owner_id || "待补充")}
         ${renderDetailRow("截止时间", formatDate(item.due_at))}
-        ${renderDetailRow("状态", item.status)}
-        ${renderDetailRow("优先级", item.priority)}
-        ${renderDetailRow("来源", item.source)}
         ${renderDetailRow("完成标准", item.completion_criteria || "待补充")}
         <div class="detail-row">
-          <div class="detail-label">缺失字段</div>
+          <div class="detail-label">还缺什么</div>
           <div class="detail-actions">${renderPills(missingFields)}</div>
         </div>
-        <div class="detail-row">
-          <div class="detail-label">建议补充字段</div>
-          <div class="detail-actions">${renderPills(recommendedFields)}</div>
+        <div class="detail-row detail-decision">
+          <div class="detail-label">判断提示</div>
+          <div class="detail-actions">${renderPills(decisionHints)}</div>
         </div>
-        <div class="detail-row">
-          <div class="detail-label">下一步判断</div>
-          <div class="detail-actions">${renderPills(nextActions)}</div>
-        </div>
-        <div class="detail-row">
-          <div class="detail-label">建议动作</div>
-          <div class="detail-actions">${renderPills(recommendedActions)}</div>
-        </div>
+        <div class="detail-note">这里只帮助判断，不会确认、忽略、删除或修改任务。</div>
+        <details class="detail-more">
+          <summary>技术信息</summary>
+          ${renderDetailRow("状态", item.status)}
+          ${renderDetailRow("优先级", item.priority)}
+          ${renderDetailRow("来源", item.source)}
+          ${renderDetailRow("建议补充字段", labelFields(item.recommended_fields || []).join("、") || "无")}
+          ${renderDetailRow("下一步判断", nextActions.join("、") || "无")}
+          ${renderDetailRow("建议动作", recommendedActions.join("、") || "无")}
+        </details>
       `;
     };
 
