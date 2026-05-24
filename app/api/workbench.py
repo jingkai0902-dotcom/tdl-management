@@ -312,6 +312,7 @@ WORKBENCH_HTML = """<!doctype html>
       <a class="scope-link" data-owner-id="" href="/workbench/view">全部</a>
       <a class="scope-link" data-owner-id="0617564550-1513038363" href="/workbench/view?owner_id=0617564550-1513038363">Frank</a>
       <a class="scope-link" data-owner-id="0611436746849471" href="/workbench/view?owner_id=0611436746849471">Helen</a>
+      <a class="scope-link" href="/workbench/meeting-review/view">5月月会判断样本</a>
     </nav>
     <div class="status-row" id="stats"></div>
     <div class="workspace">

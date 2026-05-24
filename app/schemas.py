@@ -244,6 +244,33 @@ class WorkbenchRead(BaseModel):
     sections: list[WorkbenchSectionRead]
 
 
+class MeetingReviewItemRead(BaseModel):
+    item_id: str
+    source_id: str
+    source_type: str
+    evidence_locator: str
+    summary: str
+    maturity: str
+    object_type: str
+    tdl_eligible: bool
+    confidence: str
+    notes: str
+
+
+class MeetingReviewSectionRead(BaseModel):
+    key: str
+    title: str
+    count: int
+    items: list[MeetingReviewItemRead]
+
+
+class MeetingReviewRead(BaseModel):
+    title: str
+    data_source: str
+    total_count: int
+    sections: list[MeetingReviewSectionRead]
+
+
 class ReminderCandidateRead(BaseModel):
     tdl_id: UUID
     owner_id: str
