@@ -226,6 +226,24 @@ class WeeklyReportRead(BaseModel):
     created_by_business_line: dict[str, int]
 
 
+class WorkbenchTDLRead(TDLRead):
+    owner_label: str | None = None
+
+
+class WorkbenchSectionRead(BaseModel):
+    key: str
+    title: str
+    count: int
+    data_source: str
+    items: list[WorkbenchTDLRead]
+
+
+class WorkbenchRead(BaseModel):
+    as_of: datetime
+    data_source: str
+    sections: list[WorkbenchSectionRead]
+
+
 class ReminderCandidateRead(BaseModel):
     tdl_id: UUID
     owner_id: str

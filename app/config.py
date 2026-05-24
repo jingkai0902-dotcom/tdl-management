@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     dingtalk_async_intake_enabled: bool = False
     public_base_url: str = ""
     scheduler_timezone: str = "Asia/Shanghai"
+    workbench_v0_enabled: bool = False
 
     feishu_app_id: str = ""
     feishu_app_secret: str = ""

@@ -1,4 +1,4 @@
-from app.config import load_yaml_config
+from app.config import Settings, load_yaml_config
 
 
 def test_tdl_rules_load() -> None:
@@ -17,3 +17,9 @@ def test_management_roster_includes_known_shift_types() -> None:
     assert by_name["赵晓华"]["shift_type"] == "teacher_shift"
     assert by_name["李珍"]["shift_type"] is None
     assert by_name["张蕾"]["shift_type"] is None
+
+
+def test_workbench_v0_is_disabled_by_default() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.workbench_v0_enabled is False

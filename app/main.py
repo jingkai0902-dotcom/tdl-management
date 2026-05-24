@@ -10,6 +10,7 @@ from app.api.meetings import router as meetings_router
 from app.api.reminders import router as reminders_router
 from app.api.reports import router as reports_router
 from app.api.tdl_crud import router as tdl_router
+from app.api.workbench import router as workbench_router
 from app.config import get_settings
 from app.workers.scheduler import build_scheduler
 
@@ -37,3 +38,5 @@ app.include_router(dingtalk_router)
 app.include_router(meetings_router)
 app.include_router(reminders_router)
 app.include_router(reports_router)
+if settings.workbench_v0_enabled:
+    app.include_router(workbench_router)

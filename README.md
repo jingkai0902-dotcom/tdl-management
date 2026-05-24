@@ -31,6 +31,22 @@ PYTHONPATH=. .venv/bin/python -m app.integrations.dingtalk_stream_bot
 PYTHONPATH=. .venv/bin/pytest -q
 ```
 
+只读管理工作台 V0：
+
+启动受控本地试验入口：
+
+```bash
+WORKBENCH_V0_ENABLED=true PYTHONPATH=. .venv/bin/uvicorn app.main:app --reload
+```
+
+```text
+http://127.0.0.1:8000/workbench/view
+http://127.0.0.1:8000/workbench/view?owner_id=0617564550-1513038363  # Frank
+http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen
+```
+
+工作台 V0 只读展示今日、本周剩余、逾期/临期、进行中、待确认/待判断，不创建任务、不修改状态、不发送钉钉。`owner_id` 仅用于视角筛选，不构成身份认证或权限控制；正式权限方案完成前，只应在受控试验环境开启。
+
 ## 必要环境变量
 
 至少需要配置：

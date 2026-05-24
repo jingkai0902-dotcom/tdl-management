@@ -1,0 +1,79 @@
+from datetime import UTC, datetime
+
+import pytest
+
+from app.api.workbench import get_workbench_endpoint, get_workbench_view
+from app.schemas import WorkbenchRead, WorkbenchSectionRead
+
+
+@pytest.mark.asyncio
+async def test_get_workbench_endpoint_returns_summary(monkeypatch) -> None:
+    as_of = datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+
+    async def fake_generate_workbench_summary(session, *, as_of, owner_id=None):
+        assert session is None
+        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+        assert owner_id is None
+        return WorkbenchRead(
+            as_of=as_of,
+            data_source="tdls",
+            sections=[
+                WorkbenchSectionRead(
+                    key="today",
+                    title="今日",
+                    count=0,
+                    data_source="tdls",
+                    items=[],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.api.workbench.generate_workbench_summary",
+        fake_generate_workbench_summary,
+    )
+
+    result = await get_workbench_endpoint(as_of=as_of, session=None)
+
+    assert result.as_of == as_of
+    assert result.sections[0].key == "today"
+
+
+@pytest.mark.asyncio
+async def test_get_workbench_endpoint_defaults_naive_as_of_to_utc(monkeypatch) -> None:
+    async def fake_generate_workbench_summary(session, *, as_of, owner_id=None):
+        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+        assert owner_id == "owner-1"
+        return WorkbenchRead(as_of=as_of, data_source="tdls", sections=[])
+
+    monkeypatch.setattr(
+        "app.api.workbench.generate_workbench_summary",
+        fake_generate_workbench_summary,
+    )
+
+    result = await get_workbench_endpoint(
+        as_of=datetime(2026, 5, 24, 9, 0),
+        owner_id="owner-1",
+        session=None,
+    )
+
+    assert result.as_of.tzinfo == UTC
+
+
+@pytest.mark.asyncio
+async def test_get_workbench_view_renders_read_only_shell() -> None:
+    response = await get_workbench_view()
+    body = response.body.decode()
+
+    assert response.status_code == 200
+    assert "TDL 管理工作台 V0" in body
+    assert "只读视图" in body
+    assert "fetch(`/workbench?${params.toString()}`)" in body
+    assert "不创建任务" in body
+    assert "不修改状态" in body
+    assert "同一任务可能同时出现在多个区块" in body
+    assert "/workbench/view?owner_id=0617564550-1513038363" in body
+    assert "/workbench/view?owner_id=0611436746849471" in body
+    assert "params.set(\"owner_id\", ownerId)" in body
+    assert "escapeHtml(item.title)" in body
+    assert "item.owner_label || item.owner_id" in body
