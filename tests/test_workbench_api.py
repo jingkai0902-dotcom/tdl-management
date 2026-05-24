@@ -104,5 +104,5 @@ async def test_get_workbench_view_renders_read_only_shell() -> None:
     assert "补负责人" in body
     assert "补截止时间" in body
     assert "补完成标准" in body
-    assert "可确认" in body
+    assert "满足确认条件" in body
     assert "completion_criteria: \"完成标准\"" in body

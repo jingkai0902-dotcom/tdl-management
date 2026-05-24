@@ -318,7 +318,7 @@ WORKBENCH_HTML = """<!doctype html>
         set_owner: "补负责人",
         set_due_at: "补截止时间",
         set_completion_criteria: "补完成标准",
-        confirm: "可确认",
+        confirm: "满足确认条件",
       };
       return actions.map((action) => labels[action] || action);
     };
