@@ -1,15 +1,24 @@
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_session
 from app.schemas import WorkbenchRead
 from app.services.workbench_service import generate_workbench_summary
 
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
+
+
+def _normalize_as_of(as_of: datetime) -> datetime:
+    timezone = ZoneInfo(get_settings().scheduler_timezone)
+    if as_of.tzinfo is None:
+        return as_of.replace(tzinfo=timezone)
+    return as_of.astimezone(timezone)
 
 
 WORKBENCH_HTML = """<!doctype html>
@@ -292,9 +301,11 @@ async def get_workbench_endpoint(
     owner_id: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> WorkbenchRead:
-    if as_of.tzinfo is None:
-        as_of = as_of.replace(tzinfo=UTC)
-    return await generate_workbench_summary(session, as_of=as_of, owner_id=owner_id)
+    return await generate_workbench_summary(
+        session,
+        as_of=_normalize_as_of(as_of),
+        owner_id=owner_id,
+    )
 
 
 @router.get("/view", response_class=HTMLResponse)

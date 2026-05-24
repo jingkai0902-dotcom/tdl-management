@@ -36,7 +36,7 @@ PYTHONPATH=. .venv/bin/pytest -q
 启动受控本地试验入口：
 
 ```bash
-WORKBENCH_V0_ENABLED=true PYTHONPATH=. .venv/bin/uvicorn app.main:app --reload
+WORKBENCH_V0_ENABLED=true PYTHONPATH=. .venv/bin/uvicorn app.main:app --lifespan off --reload
 ```
 
 ```text
@@ -46,6 +46,8 @@ http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen
 ```
 
 工作台 V0 只读展示今日、本周剩余、逾期/临期、进行中、待确认/待判断，不创建任务、不修改状态、不发送钉钉。`owner_id` 仅用于视角筛选，不构成身份认证或权限控制；正式权限方案完成前，只应在受控试验环境开启。
+
+本机只读试用必须使用 `--lifespan off`，避免同时启动已有提醒调度和周报发送流程；正式部署方案需另行评估工作台入口与现有调度服务的运行关系。
 
 ## 必要环境变量
 

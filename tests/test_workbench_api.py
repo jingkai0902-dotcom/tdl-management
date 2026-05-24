@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -8,11 +9,11 @@ from app.schemas import WorkbenchRead, WorkbenchSectionRead
 
 @pytest.mark.asyncio
 async def test_get_workbench_endpoint_returns_summary(monkeypatch) -> None:
-    as_of = datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+    as_of = datetime(2026, 5, 24, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
     async def fake_generate_workbench_summary(session, *, as_of, owner_id=None):
         assert session is None
-        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
         assert owner_id is None
         return WorkbenchRead(
             as_of=as_of,
@@ -40,9 +41,9 @@ async def test_get_workbench_endpoint_returns_summary(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_workbench_endpoint_defaults_naive_as_of_to_utc(monkeypatch) -> None:
+async def test_get_workbench_endpoint_defaults_naive_as_of_to_scheduler_timezone(monkeypatch) -> None:
     async def fake_generate_workbench_summary(session, *, as_of, owner_id=None):
-        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=UTC)
+        assert as_of == datetime(2026, 5, 24, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
         assert owner_id == "owner-1"
         return WorkbenchRead(as_of=as_of, data_source="tdls", sections=[])
 
@@ -57,7 +58,26 @@ async def test_get_workbench_endpoint_defaults_naive_as_of_to_utc(monkeypatch) -
         session=None,
     )
 
-    assert result.as_of.tzinfo == UTC
+    assert result.as_of.tzinfo == ZoneInfo("Asia/Shanghai")
+
+
+@pytest.mark.asyncio
+async def test_get_workbench_endpoint_converts_utc_as_of_to_scheduler_timezone(monkeypatch) -> None:
+    async def fake_generate_workbench_summary(session, *, as_of, owner_id=None):
+        assert as_of == datetime(2026, 5, 24, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
+        return WorkbenchRead(as_of=as_of, data_source="tdls", sections=[])
+
+    monkeypatch.setattr(
+        "app.api.workbench.generate_workbench_summary",
+        fake_generate_workbench_summary,
+    )
+
+    result = await get_workbench_endpoint(
+        as_of=datetime(2026, 5, 24, 0, 30, tzinfo=UTC),
+        session=None,
+    )
+
+    assert result.as_of.tzinfo == ZoneInfo("Asia/Shanghai")
 
 
 @pytest.mark.asyncio
