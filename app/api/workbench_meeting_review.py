@@ -84,6 +84,7 @@ MEETING_REVIEW_HTML = """<!doctype html>
       <div class="meta" id="count">加载中</div>
     </div>
     <nav class="nav" aria-label="工作台入口">
+      <a href="/workbench/home/view">工作台首页</a>
       <a href="/workbench/view">任务工作台</a>
       <a class="active" href="/workbench/meeting-review/view">5月月会判断样本</a>
     </nav>

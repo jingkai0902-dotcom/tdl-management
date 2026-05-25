@@ -309,6 +309,7 @@ WORKBENCH_HTML = """<!doctype html>
       <div class="meta" id="as-of">加载中</div>
     </header>
     <nav class="scope-nav" aria-label="工作台视角">
+      <a class="scope-link" href="/workbench/home/view">工作台首页</a>
       <a class="scope-link" data-owner-id="" href="/workbench/view">全部</a>
       <a class="scope-link" data-owner-id="0617564550-1513038363" href="/workbench/view?owner_id=0617564550-1513038363">Frank</a>
       <a class="scope-link" data-owner-id="0611436746849471" href="/workbench/view?owner_id=0611436746849471">Helen</a>
