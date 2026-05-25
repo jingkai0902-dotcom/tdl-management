@@ -40,6 +40,7 @@ WORKBENCH_V0_ENABLED=true PYTHONPATH=. .venv/bin/uvicorn app.main:app --lifespan
 ```
 
 ```text
+http://127.0.0.1:8000/workbench/home/view   # 统一首页只读原型
 http://127.0.0.1:8000/workbench/view
 http://127.0.0.1:8000/workbench/view?owner_id=0617564550-1513038363  # Frank
 http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen

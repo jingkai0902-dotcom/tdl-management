@@ -24,4 +24,5 @@ async def test_get_meeting_review_view_states_read_only_and_task_gate_boundary()
     assert "不创建任务、不修改状态、不发送通知" in body
     assert "不可直接转为任务" in body
     assert "不能把“待议题、火花、观察线索”误当作待办任务" in body
+    assert "/workbench/home/view" in body
     assert 'fetch("/workbench/meeting-review")' in body

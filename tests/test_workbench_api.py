@@ -92,6 +92,7 @@ async def test_get_workbench_view_renders_read_only_shell() -> None:
     assert "不创建任务" in body
     assert "不修改状态" in body
     assert "同一任务可能同时出现在多个区块" in body
+    assert "/workbench/home/view" in body
     assert "/workbench/view?owner_id=0617564550-1513038363" in body
     assert "/workbench/view?owner_id=0611436746849471" in body
     assert "/workbench/meeting-review/view" in body
