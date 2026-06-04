@@ -61,6 +61,8 @@ async def test_process_next_intake_queue_item_sends_template_card(monkeypatch) -
     async def fake_mark_failed(*args, **kwargs):
         raise AssertionError("successful item must not be marked failed")
 
+    state_events = []
+
     monkeypatch.setattr(
         "app.workers.intake_queue.get_settings",
         lambda: SimpleNamespace(dingtalk_tdl_card_template_id="tpl-1"),
@@ -69,6 +71,14 @@ async def test_process_next_intake_queue_item_sends_template_card(monkeypatch) -
     monkeypatch.setattr("app.workers.intake_queue.intake_dingtalk_message", fake_intake)
     monkeypatch.setattr("app.workers.intake_queue.mark_intake_done", fake_mark_done)
     monkeypatch.setattr("app.workers.intake_queue.mark_intake_failed", fake_mark_failed)
+    monkeypatch.setattr(
+        "app.workers.intake_queue.write_started",
+        lambda process_name: state_events.append(("started", process_name)),
+    )
+    monkeypatch.setattr(
+        "app.workers.intake_queue.write_success",
+        lambda process_name: state_events.append(("success", process_name)),
+    )
 
     processed = await process_next_intake_queue_item(
         session_factory=FakeSessionContext,
@@ -83,6 +93,7 @@ async def test_process_next_intake_queue_item_sends_template_card(monkeypatch) -
     assert client.sent_interactive[0]["card_template_id"] == "tpl-1"
     assert client.sent_markdown == []
     assert client.closed is True
+    assert state_events == [("started", "intake_worker"), ("success", "intake_worker")]
 
 
 @pytest.mark.asyncio
@@ -90,11 +101,18 @@ async def test_process_next_intake_queue_item_returns_false_when_empty(monkeypat
     async def fake_claim(session):
         return None
 
+    state_events = []
+
     monkeypatch.setattr("app.workers.intake_queue.claim_next_intake", fake_claim)
+    monkeypatch.setattr(
+        "app.workers.intake_queue.write_heartbeat",
+        lambda process_name: state_events.append(("heartbeat", process_name)),
+    )
 
     processed = await process_next_intake_queue_item(session_factory=FakeSessionContext)
 
     assert processed is False
+    assert state_events == [("heartbeat", "intake_worker")]
 
 
 @pytest.mark.asyncio
@@ -117,11 +135,27 @@ async def test_process_next_intake_queue_item_marks_failure(monkeypatch) -> None
     async def fake_mark_failed(session, item, *, error):
         seen["failed"] = (session, item.message_id, str(error))
 
+    state_events = []
+
     monkeypatch.setattr("app.workers.intake_queue.claim_next_intake", fake_claim)
     monkeypatch.setattr("app.workers.intake_queue.intake_dingtalk_message", fake_intake)
     monkeypatch.setattr("app.workers.intake_queue.mark_intake_failed", fake_mark_failed)
+    monkeypatch.setattr(
+        "app.workers.intake_queue.write_started",
+        lambda process_name: state_events.append(("started", process_name)),
+    )
+    monkeypatch.setattr(
+        "app.workers.intake_queue.write_failure",
+        lambda process_name, error, *, stop_signal: state_events.append(
+            ("failure", process_name, str(error), stop_signal)
+        ),
+    )
 
     with pytest.raises(RuntimeError, match="provider down"):
         await process_next_intake_queue_item(session_factory=FakeSessionContext)
 
     assert seen["failed"] == ("session", "msg-fail", "provider down")
+    assert state_events == [
+        ("started", "intake_worker"),
+        ("failure", "intake_worker", "provider down", "intake_worker_item_failed"),
+    ]
