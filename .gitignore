@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 venv/
 .venv/
+runtime_state/
 *.egg-info/
 .DS_Store

@@ -3,11 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.schemas import TDLCreate, TDLRead
+from app.api.auth import require_internal_api_key
 from app.services.calendar_service import create_tdl_with_calendar
 from app.services.tdl_service import list_tdls
 
 
-router = APIRouter(prefix="/tdls", tags=["tdls"])
+router = APIRouter(
+    prefix="/tdls",
+    tags=["tdls"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 
 
 @router.post("", response_model=TDLRead, status_code=status.HTTP_201_CREATED)

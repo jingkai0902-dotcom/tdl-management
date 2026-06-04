@@ -140,7 +140,12 @@ class TDLCardCallbackHandler(CallbackHandler):
         )
         actor_id = incoming.user_id
         if not action_id or not actor_id:
-            logger.warning("Unusable DingTalk card callback content: %s", incoming.content)
+            logger.warning(
+                "Unusable DingTalk card callback: has_action=%s has_actor=%s content_keys=%s",
+                bool(action_id),
+                bool(actor_id),
+                sorted(incoming.content.keys()),
+            )
             return AckMessage.STATUS_BAD_REQUEST, {"handled": False}
 
         async with SessionLocal() as session:

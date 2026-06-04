@@ -12,6 +12,12 @@ ExecStart=/opt/bots/tdl/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 
 Restart=always
 RestartSec=3
 User=tdl
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/bots/tdl/backend
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target

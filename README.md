@@ -63,6 +63,7 @@ http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen
 - `PUBLIC_BASE_URL`
 - `DINGTALK_OAUTH_SCOPE`（默认 `openid Contact.User.Read Calendar.Event.Read Calendar.Event.Write`）
 - `DINGTALK_OAUTH_REDIRECT_URI`
+- `INTERNAL_API_KEY`（生产环境保护内部写入、调试和运维 HTTP API）
 
 如果需要互动卡，再补：
 
@@ -78,6 +79,10 @@ http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen
 - `button4Text` / `button4ActionId` / `button4Visible`
 
 按钮动作需要在模板中固定枚举，点击请求参数传 `actionId=${buttonNActionId}`；显示控制绑定对应的 `buttonNVisible`。
+
+可选运行状态目录：
+
+- `RUNTIME_STATE_DIR`：默认写入代码目录下的 `runtime_state/`。生产可显式指定为 `/opt/bots/tdl/backend/runtime_state`。该目录只保存进程 heartbeat、最近成功/失败和止步信号，不保存密钥或用户原文。
 
 ## 生产目录
 
@@ -138,6 +143,7 @@ bash scripts/check-meeting-baseline.sh
 
 `scripts/tdl-prod-check.sh` 会检查 backend、Stream bot、intake worker、
 pilot metrics timer、API health、钉钉卡片模板配置和互动卡片强制开关。
+它还会读取 intake worker 的 runtime state，若心跳缺失或超过 120 秒未更新会报错。
 
 `scripts/tdl-deploy-prod.sh` 会保留生产机上由 timer 自动追加的
 `励步英语资料库/励步5月月度会/daily-pilot-metrics.md`，避免部署时用本地模板覆盖生产记录。

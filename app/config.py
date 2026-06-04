@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     public_base_url: str = ""
     scheduler_timezone: str = "Asia/Shanghai"
     workbench_v0_enabled: bool = False
+    runtime_state_dir: str = ""
+    internal_api_key: str = ""
 
     feishu_app_id: str = ""
     feishu_app_secret: str = ""
