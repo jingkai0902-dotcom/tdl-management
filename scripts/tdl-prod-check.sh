@@ -40,7 +40,7 @@ from app.runtime_state import runtime_state_path
 
 
 STALE_AFTER_SECONDS = 120
-path = runtime_state_path("intake_worker")
+path = runtime_state_path('intake_worker')
 print(f'intake_worker_state_path={path}')
 if not path.exists():
     raise SystemExit('intake_worker_state=missing')
@@ -80,7 +80,7 @@ async def main() -> None:
                   AND locked_at < now() - (:stale_minutes || ' minutes')::interval
                 '''
             ),
-            {"stale_minutes": PROCESSING_STALE_MINUTES},
+            {'stale_minutes': PROCESSING_STALE_MINUTES},
         )
         stale_processing_count = int(stale_result.scalar_one())
 
