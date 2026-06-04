@@ -3,12 +3,17 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import require_internal_api_key
 from app.database import get_session
 from app.schemas import WeeklyReportRead
 from app.services.review_service import generate_weekly_report
 
 
-router = APIRouter(prefix="/reports", tags=["reports"])
+router = APIRouter(
+    prefix="/reports",
+    tags=["reports"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 
 
 @router.get("/weekly", response_model=WeeklyReportRead)

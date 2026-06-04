@@ -10,3 +10,9 @@ EnvironmentFile=/opt/bots/tdl/backend/.env
 Environment=PYTHONPATH=/opt/bots/tdl/backend
 ExecStart=/opt/bots/tdl/backend/.venv/bin/python scripts/export-daily-pilot-metrics.py --append-ledger /opt/bots/tdl/backend/励步英语资料库/励步5月月度会/daily-pilot-metrics.md
 User=tdl
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/bots/tdl/backend
+RestrictSUIDSGID=true

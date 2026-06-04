@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import require_internal_api_key
 from app.database import get_session
 from app.integrations.dingtalk_card import build_created_card, build_draft_card
 from app.schemas import (
@@ -28,7 +29,11 @@ from app.services.tdl_service import (
 )
 
 
-router = APIRouter(prefix="/dingtalk", tags=["dingtalk"])
+router = APIRouter(
+    prefix="/dingtalk",
+    tags=["dingtalk"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 
 
 @router.post("/messages")

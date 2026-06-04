@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.config import load_yaml_config
+from app.api.auth import require_internal_api_key
 from app.integrations.dingtalk_card import TDLCard, build_draft_card
 from app.schemas import (
     DecisionRead,
@@ -19,7 +20,11 @@ from app.services.meeting_service import (
 )
 
 
-router = APIRouter(prefix="/meetings", tags=["meetings"])
+router = APIRouter(
+    prefix="/meetings",
+    tags=["meetings"],
+    dependencies=[Depends(require_internal_api_key)],
+)
 
 
 PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}

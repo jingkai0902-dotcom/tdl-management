@@ -63,6 +63,7 @@ http://127.0.0.1:8000/workbench/view?owner_id=0611436746849471       # Helen
 - `PUBLIC_BASE_URL`
 - `DINGTALK_OAUTH_SCOPE`（默认 `openid Contact.User.Read Calendar.Event.Read Calendar.Event.Write`）
 - `DINGTALK_OAUTH_REDIRECT_URI`
+- `INTERNAL_API_KEY`（生产环境保护内部写入、调试和运维 HTTP API）
 
 如果需要互动卡，再补：
 
