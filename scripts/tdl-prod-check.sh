@@ -80,7 +80,7 @@ async def main() -> None:
                   AND locked_at < now() - (:stale_minutes || ' minutes')::interval
                 '''
             ),
-            {'stale_minutes': PROCESSING_STALE_MINUTES},
+            {'stale_minutes': str(PROCESSING_STALE_MINUTES)},
         )
         stale_processing_count = int(stale_result.scalar_one())
 
